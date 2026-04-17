@@ -1,19 +1,26 @@
 import WebApp from '@twa-dev/sdk';
 
 export const initTelegram = () => {
-  WebApp.ready();
-  WebApp.expand();
-  
-  // Apply theme classes to body
-  const themeParams = (WebApp as any).themeParams || {};
-  document.body.style.backgroundColor = (WebApp as any).backgroundColor || themeParams.bg_color;
-  document.body.style.color = (WebApp as any).textColor || themeParams.text_color;
+  try {
+    WebApp.ready();
+    WebApp.expand();
+    
+    // Apply theme classes to body
+    const themeParams = (WebApp as any).themeParams || {};
+    const bgColor = (WebApp as any).backgroundColor || themeParams.bg_color;
+    const textColor = (WebApp as any).textColor || themeParams.text_color;
+    
+    if (bgColor) document.body.style.backgroundColor = bgColor;
+    if (textColor) document.body.style.color = textColor;
+  } catch (e) {
+    console.warn('Telegram WebApp SDK not initialized or running outside Telegram');
+  }
   
   return {
-    user: WebApp.initDataUnsafe.user,
-    platform: WebApp.platform,
-    theme: WebApp.colorScheme,
-    startParam: WebApp.initDataUnsafe.start_param,
+    user: WebApp?.initDataUnsafe?.user,
+    platform: WebApp?.platform || 'web',
+    theme: WebApp?.colorScheme || 'light',
+    startParam: WebApp?.initDataUnsafe?.start_param,
   };
 };
 
