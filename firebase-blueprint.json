@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Stores user game progress and state.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Auth UID" },
+        "telegramId": { "type": "number", "description": "Telegram user ID" },
+        "username": { "type": "string" },
+        "firstName": { "type": "string" },
+        "coins": { "type": "number" },
+        "totalCoins": { "type": "number" },
+        "energy": { "type": "number" },
+        "maxEnergy": { "type": "number" },
+        "lastEnergyUpdate": { "type": "number" },
+        "passiveIncomeRate": { "type": "number" },
+        "lastPassiveIncomeUpdate": { "type": "number" },
+        "walletAddress": { "type": "string" },
+        "referralCode": { "type": "string" },
+        "referredBy": { "type": "string" },
+        "referralCount": { "type": "number" },
+        "completedTasks": { "type": "array" },
+        "lastDailyReward": { "type": "number" },
+        "dailyStreak": { "type": "number" },
+        "level": { "type": "number" }
+      },
+      "required": ["uid", "telegramId", "coins", "energy", "referralCode"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of game users"
+    }
+  }
+}

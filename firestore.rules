@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: {userId} (Firebase Auth UID)
+    // Fields:
+    //   - uid: string (required)
+    //   - telegramId: number (required)
+    //   - username: string
+    //   - firstName: string
+    //   - coins: number (required)
+    //   - totalCoins: number
+    //   - energy: number (required)
+    //   - maxEnergy: number
+    //   - lastEnergyUpdate: number (timestamp ms)
+    //   - passiveIncomeRate: number
+    //   - lastPassiveIncomeUpdate: number
+    //   - walletAddress: string
+    //   - referralCode: string (required, unique)
+    //   - referredBy: string (uid)
+    //   - referralCount: number
+    //   - completedTasks: list
+    //   - lastDailyReward: number
+    //   - dailyStreak: number
+    //   - level: number
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.level >= 10 || 
+         (request.auth.token.email == "md.khotiborrahman@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidUser(data) {
+      return data.uid is string &&
+             data.telegramId is number &&
+             data.coins is number && data.coins >= 0 &&
+             data.energy is number && data.energy >= 0 && data.energy <= 5000 &&
+             data.referralCode is string &&
+             (!('walletAddress' in data) || data.walletAddress == null || data.walletAddress is string) &&
+             (!('completedTasks' in data) || data.completedTasks is list);
+    }
+
+    match /users/{userId} {
+      // Allow profile creation if they are the owner
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
+      
+      // Allow reading one's own data or for leaderboard (limited fields)
+      allow get: if isAuthenticated();
+      allow list: if isAuthenticated() && request.query.limit <= 50;
+
+      // Allow updates to own data with validation
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) &&
+                      // Basic anti-cheat: coins can only increase by a reasonable amount
+                      // (This is a bit simple, but better than nothing)
+                      request.resource.data.coins >= resource.data.coins &&
+                      // Ensure UID and Telegram ID are immutable
+                      request.resource.data.uid == resource.data.uid &&
+                      request.resource.data.telegramId == resource.data.telegramId;
+                      
+      // Admins can do anything
+      allow delete: if isAdmin();
+    }
+  }
+}

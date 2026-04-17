@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Helvetica Neue', Arial, sans-serif;
+  
+  --color-bg-main: #0f1218;
+  --color-card-bg: #1c212b;
+  --color-accent-gold: #f3ba2f;
+  --color-accent-blue: #2d9cdb;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #8e9299;
+  
+  --background-image-energy: linear-gradient(90deg, #f3ba2f 0%, #ff8c00 100%);
+}
+
+@layer base {
+  body {
+    background-color: var(--color-bg-main);
+    color: var(--color-text-primary);
+  }
+}
+
+.tap-button-shadow {
+  box-shadow: 0 0 40px rgba(0,0,0,0.4), inset 0 0 30px rgba(243, 186, 47, 0.1);
+}
+
+.coin-icon-shadow {
+  box-shadow: 0 0 20px rgba(243, 186, 47, 0.3);
+}
+
+.glass-pill {
+  background: #252b36;
+  border: 1px solid #363d4a;
+}
+
+.bg-energy {
+  background: var(--background-image-energy);
+}
