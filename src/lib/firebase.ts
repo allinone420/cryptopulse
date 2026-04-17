@@ -13,7 +13,16 @@ const firebaseConfig = {
   measurementId: firebaseConfigData.measurementId
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfigData.firestoreDatabaseId);
-export const auth = getAuth(app);
+// Initialize Firebase safely
+let app;
+try {
+  if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('TODO')) {
+    throw new Error('Firebase Config is incomplete');
+  }
+  app = initializeApp(firebaseConfig);
+} catch (e) {
+  console.error('Firebase Initialization Error:', e);
+}
+
+export const db = app ? getFirestore(app, firebaseConfigData.firestoreDatabaseId) : (null as any);
+export const auth = app ? getAuth(app) : (null as any);
