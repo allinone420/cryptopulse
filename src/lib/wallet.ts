@@ -1,7 +1,12 @@
+/// <reference types="vite/client" />
 import { createWeb3Modal, defaultConfig } from '@web3modal/ethers5/react';
 
 // 1. Get projectId from https://cloud.walletconnect.com
-const projectId = 'c2b64d0d0f50e70ca981c2f9e4f50937'; 
+const projectId = (import.meta as any).env.VITE_PROJECT_ID || 'c2b64d0d0f50e70ca981c2f9e4f50937'; 
+
+if (!projectId || projectId === 'c2b64d0d0f50e70ca981c2f9e4f50937') {
+  console.warn('WalletConnect Project ID is missing or using default. Modal might not load wallet lists correctly.');
+}
 
 // 2. Set chains
 const mainnet = {
@@ -24,15 +29,25 @@ const bsc = {
 const metadata = {
   name: 'CryptoPulse',
   description: 'Tap to earn crypto and connect your wallet',
-  url: window.location.origin,
+  url: window.location.origin || 'https://cryptopulse.io', 
   icons: ['https://picsum.photos/seed/cryptopulse/200']
 };
 
 export const web3Modal = createWeb3Modal({
-  ethersConfig: defaultConfig({ metadata }),
-  chains: [mainnet, bsc],
+  ethersConfig: defaultConfig({ 
+    metadata,
+    enableEIP6963: true,
+    enableInjected: true,
+    enableCoinbase: true,
+    rpcUrl: bsc.rpcUrl // Provide a default RPC
+  }),
+  chains: [bsc, mainnet], // Put BSC first as it's common for tap games
   projectId,
-  enableAnalytics: true
+  enableAnalytics: true,
+  themeMode: 'dark',
+  themeVariables: {
+    '--w3m-accent': '#f3ba2f'
+  }
 });
 
 export const formatAddress = (address: string) => {
