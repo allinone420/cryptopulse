@@ -5,33 +5,19 @@ export const initTelegram = () => {
     WebApp.ready();
     WebApp.expand();
     
-    // Force header color to match our app background for a seamless look
-    // Using the theme variable ensures color synchronization
-    try {
-      if (WebApp.setHeaderColor) WebApp.setHeaderColor('#0f1218');
-      if (WebApp.setBackgroundColor) WebApp.setBackgroundColor('#0f1218');
-    } catch (e) {}
+    // Hamster Kombat style seamless header
+    // Use 'bg_color' or specific hex to remove the blue/gray bar
+    if ((WebApp as any).setHeaderColor) {
+      (WebApp as any).setHeaderColor('#0f1218'); 
+    }
+    if ((WebApp as any).setBackgroundColor) {
+      (WebApp as any).setBackgroundColor('#0f1218');
+    }
 
-    // Optional: Ask before closing to avoid accidental exit
     WebApp.enableClosingConfirmation();
-    
-    // Apply theme classes to body
-    const themeParams = (WebApp as any).themeParams || {};
-    const bgColor = (WebApp as any).backgroundColor || themeParams.bg_color;
-    const textColor = (WebApp as any).textColor || themeParams.text_color;
-    
-    if (bgColor) document.body.style.backgroundColor = bgColor;
-    if (textColor) document.body.style.color = textColor;
   } catch (e) {
-    console.warn('Telegram WebApp SDK not initialized or running outside Telegram');
+    console.warn('Telegram WebApp SDK not initialized');
   }
-  
-  return {
-    user: WebApp?.initDataUnsafe?.user,
-    platform: WebApp?.platform || 'web',
-    theme: WebApp?.colorScheme || 'light',
-    startParam: WebApp?.initDataUnsafe?.start_param,
-  };
 };
 
 export const hapticFeedback = () => {

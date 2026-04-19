@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import WebApp from '@twa-dev/sdk';
 import { auth, db } from '../lib/firebase';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, serverTimestamp, increment } from 'firebase/firestore';
@@ -15,7 +16,18 @@ export const useGame = () => {
   const { address, isConnected } = useWeb3ModalAccount();
 
   // Initialize Telegram
-  const tgData = initTelegram();
+  useEffect(() => {
+    initTelegram();
+    // Set a clean document title so it looks professional in the Telegram header
+    document.title = 'CryptoPulse';
+  }, []);
+
+  const tgData = {
+    user: WebApp?.initDataUnsafe?.user,
+    platform: WebApp?.platform || 'web',
+    theme: WebApp?.colorScheme || 'light',
+    startParam: WebApp?.initDataUnsafe?.start_param,
+  };
 
   // Auth & Initial Data Fetch
   useEffect(() => {
