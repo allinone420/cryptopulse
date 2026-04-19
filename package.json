@@ -13,6 +13,7 @@
   "dependencies": {
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
+    "@tonconnect/ui-react": "^2.4.4",
     "@twa-dev/sdk": "^8.0.2",
     "@types/canvas-confetti": "^1.9.0",
     "@vitejs/plugin-react": "^5.0.4",

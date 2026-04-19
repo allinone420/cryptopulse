@@ -294,7 +294,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-bg-main text-text-primary font-sans selection:bg-accent-gold/30 flex flex-col items-center">
       <div className="w-full max-w-[390px] min-h-screen bg-bg-main relative flex flex-col overflow-hidden shadow-2xl">
-        <Header user={user} syncing={syncing} />
+        <Header user={user} syncing={syncing} setUser={setUser} />
         
         <main className="flex-1 flex flex-col pb-24 h-full relative">
           <AnimatePresence mode="wait">

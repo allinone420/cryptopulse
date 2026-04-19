@@ -1,7 +1,7 @@
-import React from 'react';
-import { Coins, Zap, Trophy, Users, CheckCircle2, Wallet, ExternalLink, RefreshCw } from 'lucide-react';
-import { useWeb3ModalAccount, useWeb3Modal } from '@web3modal/ethers5/react';
-import { formatAddress } from '../lib/wallet';
+import React, { useState } from 'react';
+import { Coins, Zap, Trophy, Users, CheckCircle2, Wallet, RefreshCw } from 'lucide-react';
+import { TonConnectButton } from '@tonconnect/ui-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface TabProps {
   active: string;
@@ -37,10 +37,7 @@ export const Navigation = ({ active, setActive }: TabProps) => {
   );
 };
 
-export const Header = ({ user, syncing }: { user: any; syncing: boolean }) => {
-  const { address, isConnected } = useWeb3ModalAccount();
-  const { open } = useWeb3Modal();
-
+export const Header = ({ user }: { user: any; syncing: boolean; setUser: React.Dispatch<React.SetStateAction<any>> }) => {
   return (
     <header className="p-5 pb-3 flex justify-between items-center bg-bg-main sticky top-0 z-40">
       <div className="flex items-center gap-2.5">
@@ -53,15 +50,7 @@ export const Header = ({ user, syncing }: { user: any; syncing: boolean }) => {
         </div>
       </div>
       
-      <button 
-        onClick={() => open()}
-        className="glass-pill px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-all active:scale-95"
-      >
-        <Wallet size={14} className="text-accent-blue" />
-        <span className="text-xs font-semibold text-accent-blue">
-          {isConnected ? formatAddress(address!) : 'Connect'}
-        </span>
-      </button>
+      <TonConnectButton />
     </header>
   );
 };
