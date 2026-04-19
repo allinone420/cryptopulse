@@ -5,6 +5,16 @@ export const initTelegram = () => {
     WebApp.ready();
     WebApp.expand();
     
+    // Force header color to match our app background for a seamless look
+    // Using the theme variable ensures color synchronization
+    try {
+      if (WebApp.setHeaderColor) WebApp.setHeaderColor('#0f1218');
+      if (WebApp.setBackgroundColor) WebApp.setBackgroundColor('#0f1218');
+    } catch (e) {}
+
+    // Optional: Ask before closing to avoid accidental exit
+    WebApp.enableClosingConfirmation();
+    
     // Apply theme classes to body
     const themeParams = (WebApp as any).themeParams || {};
     const bgColor = (WebApp as any).backgroundColor || themeParams.bg_color;
