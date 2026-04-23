@@ -6,7 +6,7 @@ import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCirc
 import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAME, LEVELS } from './lib/constants';
 import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { LeaderboardEntry } from './types/game';
 
