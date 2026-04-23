@@ -9,10 +9,11 @@ import WebApp from '@twa-dev/sdk';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { LeaderboardEntry } from './types/game';
+import AdminPanel from './components/AdminPanel';
 
 export default function App() {
   const { user, loading, syncing, tap, levelUp, setUser } = useGame();
-  const [activeTab, setActiveTab] = useState('home');
+  const [isAdminPath, setIsAdminPath] = useState(window.location.pathname === '/admin/control-center-secret');
   const [taps, setTaps] = useState<{ id: number; x: number; y: number }[]>([]);
   const [showDaily, setShowDaily] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
@@ -21,6 +22,17 @@ export default function App() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
   const tapContainerRef = useRef<HTMLDivElement>(null);
+
+  // Simple Router based on path
+  useEffect(() => {
+    const handlePathChange = () => {
+      setIsAdminPath(window.location.pathname === '/admin/control-center-secret');
+    };
+    window.addEventListener('popstate', handlePathChange);
+    return () => window.removeEventListener('popstate', handlePathChange);
+  }, []);
+
+  const [activeTab, setActiveTab] = useState('home');
 
   // Animated Coins State
   const coinsDisplay = useMotionValue(user?.coins || 0);
@@ -132,6 +144,10 @@ export default function App() {
 
     checkDaily();
   }, [user?.uid, loading]);
+
+  if (isAdminPath) {
+    return <AdminPanel />;
+  }
 
   if (loading) {
     return (

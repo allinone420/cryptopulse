@@ -33,21 +33,33 @@ export const useGame = () => {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       try {
+        const tgUser = WebApp?.initDataUnsafe?.user;
+        const currentTgId = tgUser?.id;
+
         if (fbUser) {
           const targetUid = fbUser.uid;
-          console.log('User authenticated:', targetUid);
-          
           const userRef = doc(db, 'users', targetUid);
           const userSnap = await getDoc(userRef);
 
           if (userSnap.exists()) {
-            setUser(userSnap.data() as UserData);
+            const data = userSnap.data() as UserData;
+            
+            // SECURITY CHECK: If this account belongs to a different Telegram ID,
+            // we should not allow access. This prevents session crosstalk when sharing links.
+            if (currentTgId && data.telegramId && data.telegramId !== currentTgId) {
+              console.warn('Session conflict detected! Signing out...');
+              await auth.signOut();
+              return; 
+            }
+            
+            setUser(data);
           } else {
-            // Check for referrer
-            const startParam = tgData.startParam;
+            // New User flow (Registration)
+            const startParam = WebApp?.initDataUnsafe?.start_param;
             let referrerUid = null;
             if (startParam && startParam.startsWith('ref_')) {
               const potentialReferrerId = startParam.replace('ref_', '');
+              // Prevent self-referral
               if (potentialReferrerId !== fbUser.uid) {
                 referrerUid = potentialReferrerId;
               }
@@ -55,9 +67,9 @@ export const useGame = () => {
 
             const newUser: UserData = {
               uid: targetUid,
-              telegramId: tgData.user?.id || 0,
-              username: tgData.user?.username || tgData.user?.first_name || 'Player',
-              firstName: tgData.user?.first_name || 'Player',
+              telegramId: currentTgId || 0,
+              username: tgUser?.username || tgUser?.first_name || 'Player',
+              firstName: tgUser?.first_name || 'Player',
               coins: referrerUid ? REFERRAL_REWARD_REFEREE : 0,
               totalCoins: referrerUid ? REFERRAL_REWARD_REFEREE : 0,
               energy: INITIAL_ENERGY,
@@ -77,6 +89,7 @@ export const useGame = () => {
             
             await setDoc(userRef, newUser);
 
+            // Reward the referrer
             if (referrerUid) {
               try {
                 const referrerRef = doc(db, 'users', referrerUid);
@@ -93,19 +106,18 @@ export const useGame = () => {
             setUser(newUser);
           }
         } else {
-          console.log('No user, signing in anonymously...');
+          // If no Firebase user, attempt to sign in
           await signInAnonymously(auth);
         }
       } catch (err) {
         console.error('Initialization error:', err);
       } finally {
-        // Ensure loading is always stopped after attempt
         setLoading(false);
       }
     });
 
     return () => unsub();
-  }, [tgData.user?.id]);
+  }, [WebApp?.initDataUnsafe?.user?.id]);
 
   // Energy Refill & Passive Income Ticker
   useEffect(() => {
@@ -176,7 +188,8 @@ export const useGame = () => {
           lastEnergyUpdate: user.lastEnergyUpdate,
           lastPassiveIncomeUpdate: user.lastPassiveIncomeUpdate,
           lastDailyReward: user.lastDailyReward,
-          dailyStreak: user.dailyStreak
+          dailyStreak: user.dailyStreak,
+          lastActive: Date.now()
         });
       } catch (err) {
         console.error('Sync failed:', err);

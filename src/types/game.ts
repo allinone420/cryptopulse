@@ -18,6 +18,7 @@ export interface UserData {
   lastDailyReward: number | null; // timestamp
   dailyStreak: number;
   level: number;
+  lastActive?: number;
 }
 
 export interface Task {
