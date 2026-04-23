@@ -19,7 +19,7 @@ export const useGame = () => {
   useEffect(() => {
     initTelegram();
     // Set a clean document title so it looks professional in the Telegram header
-    document.title = 'CryptoPulse';
+    document.title = 'SatoCryp';
   }, []);
 
   const tgData = {
@@ -33,9 +33,9 @@ export const useGame = () => {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
-        // Shared Guest Logic: If no Telegram user, use a fixed shared ID
-        const isTelegramUser = !!tgData.user?.id;
-        const targetUid = isTelegramUser ? fbUser.uid : 'global_shared_guest';
+        // Use the actual Firebase UID for both Telegram and Anonymous guests
+        // to ensure each "guest" has their own unique progress.
+        const targetUid = fbUser.uid;
         
         const userRef = doc(db, 'users', targetUid);
         const userSnap = await getDoc(userRef);
@@ -173,7 +173,9 @@ export const useGame = () => {
           energy: Math.floor(user.energy),
           level: user.level,
           lastEnergyUpdate: user.lastEnergyUpdate,
-          lastPassiveIncomeUpdate: user.lastPassiveIncomeUpdate
+          lastPassiveIncomeUpdate: user.lastPassiveIncomeUpdate,
+          lastDailyReward: user.lastDailyReward,
+          dailyStreak: user.dailyStreak
         });
       } catch (err) {
         console.error('Sync failed:', err);

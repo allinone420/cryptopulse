@@ -1,5 +1,5 @@
 export const INITIAL_ENERGY = 1000;
-export const BOT_USERNAME = 'CryptoPulseBot'; // User should update this with their actual bot username
+export const BOT_USERNAME = 'SatoCryp_bot';
 export const ENERGY_REFILL_RATE = 1; // energy per second
 export const COINS_PER_TAP = 1;
 
@@ -9,7 +9,8 @@ export const TASKS = [
   { id: 'invite_3', title: 'Invite 3 Friends', reward: 2000, type: 'invite' },
 ];
 
-export const DAILY_REWARDS = [100, 200, 300, 500, 1000, 2500, 5000];
+export const DAILY_REWARD_BASE = 1000;
+export const DAILY_REWARD_STEP = 500;
 
 export const REFERRAL_REWARD_REFERRER = 5000;
 export const REFERRAL_REWARD_REFEREE = 2500;

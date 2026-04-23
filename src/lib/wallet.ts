@@ -27,10 +27,10 @@ const bsc = {
 
 // 3. Create modal
 const metadata = {
-  name: 'CryptoPulse',
+  name: 'SatoCryp',
   description: 'Tap to earn crypto and connect your wallet',
-  url: window.location.origin || 'https://cryptopulse.io', 
-  icons: ['https://picsum.photos/seed/cryptopulse/200']
+  url: window.location.origin || 'https://satocryp.com', 
+  icons: ['https://raw.githubusercontent.com/allinone420/cryptopulse/refs/heads/main/public/logo.png']
 };
 
 export const web3Modal = createWeb3Modal({

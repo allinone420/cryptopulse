@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, anima
 import { useGame } from './hooks/useGame';
 import { Navigation, Header } from './components/Navigation';
 import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCircle, Copy, Check } from 'lucide-react';
-import { TASKS, DAILY_REWARDS, COINS_PER_TAP, BOT_USERNAME, LEVELS } from './lib/constants';
+import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAME, LEVELS } from './lib/constants';
 import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
@@ -92,36 +92,103 @@ export default function App() {
 
   // Daily Reward Check
   useEffect(() => {
-    if (user && !user.lastDailyReward) {
-      setShowDaily(true);
-    } else if (user?.lastDailyReward) {
-      const last = new Date(user.lastDailyReward);
+    if (!user || loading) return;
+
+    const checkDaily = () => {
       const now = new Date();
-      if (last.getDate() !== now.getDate()) {
+      
+      if (!user.lastDailyReward) {
+        setShowDaily(true);
+        return;
+      }
+
+      const last = new Date(user.lastDailyReward);
+      
+      // If already claimed today, don't show
+      const isSameDay = 
+        last.getFullYear() === now.getFullYear() &&
+        last.getMonth() === now.getMonth() &&
+        last.getDate() === now.getDate();
+
+      if (!isSameDay) {
+        // Check if streak was broken (last claim was before yesterday)
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        
+        const wasConsecutive = 
+          last.getFullYear() === yesterday.getFullYear() &&
+          last.getMonth() === yesterday.getMonth() &&
+          last.getDate() === yesterday.getDate();
+
+        if (!wasConsecutive) {
+          // Reset streak in local state to show correct info in modal
+          // The actual DB update happens on claim
+          setUser(prev => prev ? ({ ...prev, dailyStreak: 0 }) : null);
+        }
+        
         setShowDaily(true);
       }
-    }
-  }, [user?.uid]);
+    };
+
+    checkDaily();
+  }, [user?.uid, loading]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0b0d] flex flex-col items-center justify-center gap-4">
         <div className="w-16 h-16 border-4 border-[#f3ba2f] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[#f3ba2f] font-bold uppercase tracking-widest text-xs">CryptoPulse Initializing...</p>
+        <p className="text-[#f3ba2f] font-bold uppercase tracking-widest text-xs">SatoCryp Initializing...</p>
       </div>
     );
   }
 
   const claimDaily = () => {
     if (!user) return;
-    const reward = DAILY_REWARDS[user.dailyStreak % DAILY_REWARDS.length];
-    setUser(prev => prev ? ({
-      ...prev,
-      coins: prev.coins + reward,
-      totalCoins: prev.totalCoins + reward,
+    
+    const now = new Date();
+    let newStreak = (user.dailyStreak || 0) + 1;
+    
+    // Safety check again for streak reset
+    if (user.lastDailyReward) {
+      const last = new Date(user.lastDailyReward);
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      
+      const wasConsecutive = 
+        last.getFullYear() === yesterday.getFullYear() &&
+        last.getMonth() === yesterday.getMonth() &&
+        last.getDate() === yesterday.getDate();
+
+      if (!wasConsecutive) {
+        newStreak = 1; // Reset to 1 on claim if broken
+      }
+    }
+
+    const reward = DAILY_REWARD_BASE + (newStreak - 1) * DAILY_REWARD_STEP;
+    
+    const updatedUser = {
+      ...user,
+      coins: user.coins + reward,
+      totalCoins: user.totalCoins + reward,
       lastDailyReward: Date.now(),
-      dailyStreak: prev.dailyStreak + 1
-    }) : null);
+      dailyStreak: newStreak
+    };
+
+    setUser(updatedUser);
+
+    // Immediate persistence to prevent repeat popups on refresh
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      updateDoc(userRef, {
+        coins: Math.floor(updatedUser.coins),
+        totalCoins: Math.floor(updatedUser.totalCoins),
+        lastDailyReward: updatedUser.lastDailyReward,
+        dailyStreak: updatedUser.dailyStreak
+      });
+    } catch (err) {
+      console.error('Failed to save daily reward:', err);
+    }
+
     setShowDaily(false);
     confetti({
       particleCount: 150,
@@ -129,6 +196,7 @@ export default function App() {
       origin: { y: 0.6 },
       colors: ['#f3ba2f', '#e19c00', '#ffffff']
     });
+    WebApp.HapticFeedback.notificationOccurred('success');
   };
 
   const watchAd = (taskId: string) => {
@@ -219,9 +287,9 @@ export default function App() {
             <div className="w-[160px] h-[160px] bg-[#363d4a] rounded-[40px] rotate-45 flex items-center justify-center overflow-hidden">
                <div className="-rotate-45 relative w-full h-full flex items-center justify-center">
                 <img 
-                  src="https://picsum.photos/seed/cryptopulse_tap/500/500" 
-                  alt="CryptoPulse" 
-                  className="w-[180%] h-[180%] object-cover select-none pointer-events-none opacity-80"
+                  src="https://raw.githubusercontent.com/allinone420/cryptopulse/refs/heads/main/public/logo.png" 
+                  alt="SatoCryp" 
+                  className="w-full h-full object-cover select-none pointer-events-none opacity-90"
                   referrerPolicy="no-referrer"
                 />
                </div>
@@ -317,7 +385,7 @@ export default function App() {
 
   const shareInvite = () => {
     const link = generateInviteLink();
-    const text = `Join me on CryptoPulse and get 2,500 coins as a welcome bonus! 🚀`;
+    const text = `Join me on SatoCryp and get 2,500 coins as a welcome bonus! 🚀`;
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
     WebApp.openTelegramLink(shareUrl);
   };
@@ -467,8 +535,13 @@ export default function App() {
               </div>
               
               <div className="bg-black/40 w-full py-4 rounded-2xl border border-gray-800">
-                <div className="flex items-center justify-center gap-2 text-[#f3ba2f] text-3xl font-black">
-                  +{DAILY_REWARDS[user?.dailyStreak % DAILY_REWARDS.length].toLocaleString()} <Coins size={28} />
+                <div className="flex flex-col items-center justify-center gap-1">
+                  <div className="flex items-center gap-2 text-[#f3ba2f] text-3xl font-black">
+                    +{(DAILY_REWARD_BASE + (user?.dailyStreak || 0) * DAILY_REWARD_STEP).toLocaleString()} <Coins size={28} />
+                  </div>
+                  <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">
+                    Streak Bonus Included
+                  </p>
                 </div>
               </div>
 
