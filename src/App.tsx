@@ -1,20 +1,94 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, animate } from 'framer-motion';
 import { useGame } from './hooks/useGame';
 import { Navigation, Header } from './components/Navigation';
 import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCircle, Copy, Check } from 'lucide-react';
-import { TASKS, DAILY_REWARDS, COINS_PER_TAP, BOT_USERNAME } from './lib/constants';
+import { TASKS, DAILY_REWARDS, COINS_PER_TAP, BOT_USERNAME, LEVELS } from './lib/constants';
 import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db } from './lib/firebase';
+import { LeaderboardEntry } from './types/game';
 
 export default function App() {
-  const { user, loading, syncing, tap, setUser } = useGame();
+  const { user, loading, syncing, tap, levelUp, setUser } = useGame();
   const [activeTab, setActiveTab] = useState('home');
   const [taps, setTaps] = useState<{ id: number; x: number; y: number }[]>([]);
   const [showDaily, setShowDaily] = useState(false);
+  const [showLevelUp, setShowLevelUp] = useState(false);
   const [adCooldown, setAdCooldown] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [loadingLeaders, setLoadingLeaders] = useState(false);
   const tapContainerRef = useRef<HTMLDivElement>(null);
+
+  // Animated Coins State
+  const coinsDisplay = useMotionValue(user?.coins || 0);
+  const roundedCoins = useTransform(coinsDisplay, (latest) => Math.floor(latest).toLocaleString());
+
+  useEffect(() => {
+    if (user?.coins !== undefined) {
+      animate(coinsDisplay, user.coins, { duration: 0.5, ease: "easeOut" });
+    }
+  }, [user?.coins]);
+
+  // Fetch Leaderboard
+  useEffect(() => {
+    if (activeTab === 'leaders') {
+      const fetchLeaders = async () => {
+        setLoadingLeaders(true);
+        try {
+          const q = query(collection(db, 'users'), orderBy('coins', 'desc'), limit(50));
+          const snapshot = await getDocs(q);
+          const leaders = snapshot.docs.map(doc => ({
+            username: doc.data().username || 'Anonymous',
+            coins: doc.data().coins || 0,
+            level: doc.data().level || 1
+          }));
+          setLeaderboard(leaders);
+        } catch (err) {
+          console.error("Leaderboard fetch error:", err);
+        } finally {
+          setLoadingLeaders(false);
+        }
+      };
+      fetchLeaders();
+    }
+  }, [activeTab]);
+
+  const nextLevel = LEVELS.find(l => l.level === (user?.level || 1) + 1);
+  const currentLevelInfo = LEVELS.find(l => l.level === (user?.level || 1)) || LEVELS[0];
+
+  const handleLevelUp = async () => {
+    if (!user || !nextLevel) return;
+    if (user.coins >= nextLevel.upgradeCost) {
+      await levelUp();
+      setShowLevelUp(false);
+      
+      // Celebratory Effects
+      const duration = 3 * 1000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+      const interval: any = setInterval(function() {
+        const timeLeft = animationEnd - Date.now();
+
+        if (timeLeft <= 0) {
+          return clearInterval(interval);
+        }
+
+        const particleCount = 50 * (timeLeft / duration);
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+      }, 250);
+
+      WebApp.HapticFeedback.notificationOccurred('success');
+    } else {
+      WebApp.HapticFeedback.notificationOccurred('error');
+    }
+  };
 
   // Daily Reward Check
   useEffect(() => {
@@ -109,13 +183,18 @@ export default function App() {
     <div className="flex flex-col gap-6 w-full">
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-2.5 px-5 mt-2.5">
+        <button 
+          onClick={() => setShowLevelUp(true)}
+          className="bg-card-bg p-3 rounded-2xl text-center border-b-2 border-white/5 active:scale-95 transition-transform"
+        >
+          <div className="text-[10px] text-text-secondary uppercase tracking-wider mb-1 font-medium">Level Progression</div>
+          <div className="text-sm font-bold text-accent-gold flex items-center justify-center gap-1">
+             {currentLevelInfo.name} <ChevronRight size={14} />
+          </div>
+        </button>
         <div className="bg-card-bg p-3 rounded-2xl text-center border-b-2 border-white/5">
           <div className="text-[10px] text-text-secondary uppercase tracking-wider mb-1 font-medium">Profit per hour</div>
-          <div className="text-sm font-bold text-accent-gold">+{((user?.passiveIncomeRate || 1) * 3600).toLocaleString()}</div>
-        </div>
-        <div className="bg-card-bg p-3 rounded-2xl text-center border-b-2 border-white/5">
-          <div className="text-[10px] text-text-secondary uppercase tracking-wider mb-1 font-medium">Tap Value</div>
-          <div className="text-sm font-bold text-accent-gold">+{COINS_PER_TAP}</div>
+          <div className="text-sm font-bold text-accent-gold">+{(currentLevelInfo.passiveRate * 3600).toLocaleString()}</div>
         </div>
       </div>
 
@@ -125,7 +204,7 @@ export default function App() {
           <div className="text-sm text-text-secondary uppercase tracking-widest mb-1.5 font-medium">Total Balance</div>
           <h1 className="text-[42px] font-bold flex items-center justify-center gap-2.5 leading-none">
             <div className="w-10 h-10 bg-accent-gold rounded-full coin-icon-shadow border-2 border-white/10" />
-            {Math.floor(user?.coins || 0).toLocaleString()}
+            <motion.span>{roundedCoins}</motion.span>
           </h1>
         </div>
 
@@ -311,39 +390,45 @@ export default function App() {
               {activeTab === 'friends' && renderFriends()}
               {activeTab === 'leaders' && (
                 <div className="p-5 flex flex-col gap-4">
-                  <h2 className="text-2xl font-bold text-white tracking-tight">Leaderboard</h2>
-                  <div className="bg-card-bg rounded-2xl border border-white/5 overflow-hidden shadow-xl">
-                    <div className="p-4 bg-white/5 flex justify-between items-center">
-                      <span className="text-[10px] uppercase font-bold text-text-secondary tracking-widest">Rank / Player</span>
-                      <span className="text-[10px] uppercase font-bold text-text-secondary tracking-widest">Coins</span>
+                  <h2 className="text-2xl font-bold text-white tracking-tight italic">Global Elite</h2>
+                  <div className="bg-card-bg rounded-2xl border border-white/5 overflow-hidden shadow-xl flex flex-col max-h-[70vh]">
+                    <div className="p-4 bg-white/5 flex justify-between items-center text-[10px] uppercase font-bold text-text-secondary tracking-widest sticky top-0 z-10 backdrop-blur-md">
+                      <span>Rank / Player</span>
+                      <span>Coins</span>
                     </div>
-                    {[
-                      { rank: 1, name: 'CryptoWhale', coins: 14500000, level: 5 },
-                      { rank: 2, name: 'TapperGod', coins: 12000000, level: 5 },
-                      { rank: 3, name: 'HamsterBoss', coins: 9500000, level: 4 },
-                      { rank: 4, name: 'MiniAppKing', coins: 7200000, level: 4 },
-                      { rank: 5, name: 'SolanaFarmer', coins: 4100000, level: 3 },
-                    ].map((leader) => (
-                      <div key={leader.rank} className="p-4 flex items-center justify-between border-t border-white/5 hover:bg-white/5 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] ${leader.rank === 1 ? 'bg-accent-gold text-black' : leader.rank === 2 ? 'bg-gray-400 text-black' : leader.rank === 3 ? 'bg-amber-600 text-white' : 'text-white/40'}`}>
-                            {leader.rank}
-                          </span>
-                          <div>
-                            <p className="text-sm font-bold text-white">{leader.name}</p>
-                            <p className="text-[9px] text-accent-gold uppercase font-black">Lvl {leader.level}</p>
+                    <div className="overflow-y-auto flex-1">
+                      {loadingLeaders ? (
+                        <div className="p-10 flex justify-center">
+                           <div className="w-6 h-6 border-2 border-accent-gold border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      ) : leaderboard.length > 0 ? (
+                        leaderboard.map((leader, index) => (
+                          <div key={index} className="p-4 flex items-center justify-between border-t border-white/5 hover:bg-white/5 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] ${index === 0 ? 'bg-accent-gold text-black' : index === 1 ? 'bg-gray-400 text-black' : index === 2 ? 'bg-amber-600 text-white' : 'text-white/40'}`}>
+                                {index + 1}
+                              </span>
+                              <div>
+                                <p className="text-sm font-bold text-white truncate max-w-[120px]">{leader.username}</p>
+                                <p className="text-[9px] text-accent-gold uppercase font-black">Lvl {leader.level}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 font-black text-sm text-accent-gold">
+                              {Math.floor(leader.coins).toLocaleString()} <Coins size={12} />
+                            </div>
                           </div>
+                        ))
+                      ) : (
+                        <div className="p-10 text-center text-text-secondary text-sm italic">
+                          No players found yet.
                         </div>
-                        <div className="flex items-center gap-1 font-black text-sm text-accent-gold">
-                          {leader.coins.toLocaleString()} <Coins size={12} />
-                        </div>
-                      </div>
-                    ))}
-                    {/* Your position */}
-                    <div className="p-4 bg-accent-gold/10 border-t-2 border-accent-gold/40 flex items-center justify-between">
+                      )}
+                    </div>
+                    {/* Your position footer */}
+                    <div className="p-4 bg-accent-gold/10 border-t-2 border-accent-gold/40 flex items-center justify-between sticky bottom-0 z-10 backdrop-blur-md">
                        <div className="flex items-center gap-3">
-                          <span className="w-8 h-8 rounded-lg bg-accent-gold text-black flex items-center justify-center font-bold text-[10px]">#45k</span>
-                          <p className="text-sm font-bold text-white italic">You ({user?.username})</p>
+                          <div className="w-8 h-8 rounded-lg bg-accent-gold text-black flex items-center justify-center font-bold text-[10px]">YOU</div>
+                          <p className="text-sm font-bold text-white italic">{user?.username}</p>
                         </div>
                         <div className="flex items-center gap-1 font-black text-sm text-accent-gold">
                           {Math.floor(user?.coins || 0).toLocaleString()} <Coins size={12} />
@@ -362,8 +447,12 @@ export default function App() {
       {/* Daily Reward Modal */}
       <AnimatePresence>
         {showDaily && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
+          <div 
+            onClick={() => setShowDaily(false)}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm"
+          >
             <motion.div
+              onClick={(e) => e.stopPropagation()}
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
@@ -389,6 +478,104 @@ export default function App() {
               >
                 Claim Reward
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Level Up Modal */}
+      <AnimatePresence>
+        {showLevelUp && (
+          <div 
+            onClick={() => setShowLevelUp(false)}
+            className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-md px-4 pb-10 sm:p-6"
+          >
+            <motion.div
+              onClick={(e) => e.stopPropagation()}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="bg-card-bg w-full max-w-sm rounded-[32px] border border-white/10 p-8 flex flex-col gap-6 shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setShowLevelUp(false)}
+                className="absolute top-4 right-4 p-2 hover:bg-white/5 rounded-full text-text-secondary"
+              >
+                <CheckCircle2 size={24} className="rotate-45" />
+              </button>
+
+              <div className="flex flex-col items-center gap-4 text-center">
+                <div className="w-20 h-20 bg-accent-gold/20 rounded-[28px] flex items-center justify-center text-accent-gold shadow-lg shadow-accent-gold/10">
+                  <Trophy size={40} />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black italic text-white leading-tight">LEVEL UPGRADE</h3>
+                  <p className="text-text-secondary text-sm">Enhance your tapping power</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="p-4 bg-black/40 rounded-2xl border border-white/5 text-center">
+                    <p className="text-[10px] text-text-secondary uppercase font-bold mb-1">Current</p>
+                    <p className="text-lg font-black text-white">{currentLevelInfo.name}</p>
+                 </div>
+                 <div className="p-4 bg-accent-gold/10 rounded-2xl border border-accent-gold/20 text-center">
+                    <p className="text-[10px] text-accent-gold uppercase font-bold mb-1">Next</p>
+                    <p className="text-lg font-black text-accent-gold">{nextLevel ? nextLevel.name : 'MAX'}</p>
+                 </div>
+              </div>
+
+              {nextLevel ? (
+                <>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-text-secondary">Tap Value</span>
+                      <span className="text-white font-bold">+{currentLevelInfo.tapValue} → <span className="text-accent-gold">+{nextLevel.tapValue}</span></span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-text-secondary">Profit per Hour</span>
+                      <span className="text-white font-bold">{(currentLevelInfo.passiveRate * 3600).toLocaleString()} → <span className="text-accent-gold">{(nextLevel.passiveRate * 3600).toLocaleString()}</span></span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-text-secondary">Max Energy</span>
+                      <span className="text-white font-bold">{currentLevelInfo.maxEnergy.toLocaleString()} → <span className="text-accent-gold">{nextLevel.maxEnergy.toLocaleString()}</span></span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-text-secondary">Upgrade Cost</span>
+                      <span className="text-accent-gold font-black flex items-center gap-1">
+                        {nextLevel.upgradeCost.toLocaleString()} <Coins size={14} />
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Level Roadmap */}
+                  <div className="flex flex-col gap-2 mt-2 max-h-[120px] overflow-y-auto pr-2 custom-scrollbar">
+                    <p className="text-[10px] text-text-secondary uppercase font-black sticky top-0 bg-card-bg py-1">Roadmap (Available Levels)</p>
+                    {LEVELS.map((lvl) => (
+                      <div key={lvl.level} className={`flex justify-between items-center p-2 rounded-lg text-[10px] ${lvl.level === user?.level ? 'bg-accent-gold/20' : 'bg-black/20'}`}>
+                        <div className="flex items-center gap-2">
+                           <span className={lvl.level <= (user?.level || 1) ? 'text-accent-gold' : 'text-text-secondary'}>#{lvl.level}</span>
+                           <span className="font-bold text-white uppercase">{lvl.name}</span>
+                        </div>
+                        <span className="text-accent-gold font-bold">+{lvl.tapValue} Tap / {(lvl.passiveRate * 3600).toLocaleString()} PPH</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button 
+                    onClick={handleLevelUp}
+                    disabled={(user?.coins || 0) < nextLevel.upgradeCost}
+                    className="w-full bg-accent-gold text-black py-4 rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl shadow-accent-gold/20 active:translate-y-0.5 transition-all disabled:opacity-30 disabled:scale-100 mt-4"
+                  >
+                    Upgrade Level
+                  </button>
+                </>
+              ) : (
+                <div className="text-center p-6 bg-accent-gold/5 rounded-2xl border border-accent-gold/10 font-bold text-accent-gold">
+                  You are at the Maximum Level! 🏆
+                </div>
+              )}
             </motion.div>
           </div>
         )}

@@ -24,9 +24,13 @@
     background-color: var(--color-bg-main);
     color: var(--color-text-primary);
     -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
     user-select: none;
     /* Safe area padding for immersive look */
     padding-top: env(safe-area-inset-top);
+    touch-action: manipulation;
   }
 }
 

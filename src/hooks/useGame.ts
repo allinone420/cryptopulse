@@ -33,36 +33,40 @@ export const useGame = () => {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
-        const userRef = doc(db, 'users', fbUser.uid);
+        // Shared Guest Logic: If no Telegram user, use a fixed shared ID
+        const isTelegramUser = !!tgData.user?.id;
+        const targetUid = isTelegramUser ? fbUser.uid : 'global_shared_guest';
+        
+        const userRef = doc(db, 'users', targetUid);
         const userSnap = await getDoc(userRef);
 
         if (userSnap.exists()) {
           setUser(userSnap.data() as UserData);
         } else {
-          // Check for referrer
+          // Check for referrer (Only for real Telegram users)
           let referrerUid = null;
-          if (tgData.startParam && tgData.startParam.startsWith('ref_')) {
+          if (isTelegramUser && tgData.startParam && tgData.startParam.startsWith('ref_')) {
             const potentialReferrerId = tgData.startParam.replace('ref_', '');
             if (potentialReferrerId !== fbUser.uid) {
               referrerUid = potentialReferrerId;
             }
           }
 
-          // Create new user
+          // Create new user (Either real or shared guest)
           const newUser: UserData = {
-            uid: fbUser.uid,
+            uid: targetUid,
             telegramId: tgData.user?.id || 0,
-            username: tgData.user?.username || 'Guest',
-            firstName: tgData.user?.first_name || 'Player',
+            username: isTelegramUser ? (tgData.user?.username || 'Player') : 'Global Guest',
+            firstName: isTelegramUser ? (tgData.user?.first_name || 'Player') : 'Guest',
             coins: referrerUid ? REFERRAL_REWARD_REFEREE : 0,
             totalCoins: referrerUid ? REFERRAL_REWARD_REFEREE : 0,
             energy: INITIAL_ENERGY,
-            maxEnergy: INITIAL_ENERGY,
+            maxEnergy: LEVELS[0].maxEnergy,
             lastEnergyUpdate: Date.now(),
-            passiveIncomeRate: 1, 
+            passiveIncomeRate: LEVELS[0].passiveRate, 
             lastPassiveIncomeUpdate: Date.now(),
             walletAddress: null,
-            referralCode: fbUser.uid, // Use UID as referral code for simplicity
+            referralCode: targetUid, 
             referredBy: referrerUid,
             referralCount: 0,
             completedTasks: [],
@@ -124,17 +128,10 @@ export const useGame = () => {
         let newCoins = prev.coins;
         let newTotal = prev.totalCoins;
         if (passiveSeconds >= 1) {
-          const income = prev.passiveIncomeRate * passiveSeconds;
+          const currentLevel = LEVELS.find(l => l.level === prev.level) || LEVELS[0];
+          const income = currentLevel.passiveRate * passiveSeconds;
           newCoins += income;
           newTotal += income;
-        }
-
-        // Check level up
-        let newLevel = prev.level;
-        const currentLevelInfo = LEVELS.find(l => l.level === prev.level);
-        const nextLevelInfo = LEVELS.find(l => l.level === prev.level + 1);
-        if (nextLevelInfo && newTotal >= nextLevelInfo.minCoins) {
-          newLevel = nextLevelInfo.level;
         }
 
         return {
@@ -142,7 +139,6 @@ export const useGame = () => {
           energy: newEnergy,
           coins: newCoins,
           totalCoins: newTotal,
-          level: newLevel,
           lastEnergyUpdate: now,
           lastPassiveIncomeUpdate: now
         };
@@ -196,16 +192,54 @@ export const useGame = () => {
 
     hapticFeedback();
     
+    const currentLevel = LEVELS.find(l => l.level === user.level) || LEVELS[0];
+    const tapVal = currentLevel.tapValue;
+
     setUser((prev) => {
       if (!prev || prev.energy < 1) return prev;
       return {
         ...prev,
-        coins: prev.coins + COINS_PER_TAP,
-        totalCoins: prev.totalCoins + COINS_PER_TAP,
+        coins: prev.coins + tapVal,
+        totalCoins: prev.totalCoins + tapVal,
         energy: prev.energy - 1
       };
     });
-  }, [user?.energy]);
+  }, [user?.energy, user?.level]);
 
-  return { user, loading, syncing, tap, setUser };
+  const levelUp = useCallback(async () => {
+    if (!user) return;
+    
+    const nextLevel = LEVELS.find(l => l.level === user.level + 1);
+    if (!nextLevel) return; // Max level reached
+
+    if (user.coins >= nextLevel.upgradeCost) {
+      const newUser = {
+        ...user,
+        coins: user.coins - nextLevel.upgradeCost,
+        level: nextLevel.level,
+        maxEnergy: nextLevel.maxEnergy,
+        passiveIncomeRate: nextLevel.passiveRate,
+        // Refill energy on level up
+        energy: nextLevel.maxEnergy
+      };
+      
+      setUser(newUser);
+      
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          coins: newUser.coins,
+          level: newUser.level,
+          maxEnergy: newUser.maxEnergy,
+          passiveIncomeRate: newUser.passiveIncomeRate,
+          energy: newUser.energy
+        });
+        hapticFeedback();
+      } catch (err) {
+        console.error('Level upgrade failed:', err);
+      }
+    }
+  }, [user]);
+
+  return { user, loading, syncing, tap, levelUp, setUser };
 };

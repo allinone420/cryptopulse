@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Coins, Zap, Trophy, Users, CheckCircle2, Wallet, RefreshCw } from 'lucide-react';
 import { TonConnectButton } from '@tonconnect/ui-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { LEVELS } from '../lib/constants';
 
 interface TabProps {
   active: string;
@@ -38,6 +39,8 @@ export const Navigation = ({ active, setActive }: TabProps) => {
 };
 
 export const Header = ({ user }: { user: any; syncing: boolean; setUser: React.Dispatch<React.SetStateAction<any>> }) => {
+  const currentLevelInfo = LEVELS.find(l => l.level === (user?.level || 1)) || LEVELS[0];
+  
   return (
     <header className="px-5 pt-5 pb-3 flex justify-between items-center bg-bg-main sticky top-0 z-40 transition-all">
       <div className="flex items-center gap-2.5">
@@ -46,7 +49,7 @@ export const Header = ({ user }: { user: any; syncing: boolean; setUser: React.D
         </div>
         <div>
           <strong className="text-sm block leading-tight">{user?.username || '@player'}</strong>
-          <span className="text-xs text-text-secondary block">Level {user?.level} / 10</span>
+          <span className="text-xs text-text-secondary block">{currentLevelInfo.name} — Lvl {user?.level}</span>
         </div>
       </div>
       
