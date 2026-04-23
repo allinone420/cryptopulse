@@ -32,79 +32,80 @@ export const useGame = () => {
   // Auth & Initial Data Fetch
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
-      if (fbUser) {
-        // Use the actual Firebase UID for both Telegram and Anonymous guests
-        // to ensure each "guest" has their own unique progress.
-        const targetUid = fbUser.uid;
-        
-        const userRef = doc(db, 'users', targetUid);
-        const userSnap = await getDoc(userRef);
-
-        if (userSnap.exists()) {
-          setUser(userSnap.data() as UserData);
-        } else {
-          // Check for referrer (Only for real Telegram users)
-          let referrerUid = null;
-          if (isTelegramUser && tgData.startParam && tgData.startParam.startsWith('ref_')) {
-            const potentialReferrerId = tgData.startParam.replace('ref_', '');
-            if (potentialReferrerId !== fbUser.uid) {
-              referrerUid = potentialReferrerId;
-            }
-          }
-
-          // Create new user (Either real or shared guest)
-          const newUser: UserData = {
-            uid: targetUid,
-            telegramId: tgData.user?.id || 0,
-            username: isTelegramUser ? (tgData.user?.username || 'Player') : 'Global Guest',
-            firstName: isTelegramUser ? (tgData.user?.first_name || 'Player') : 'Guest',
-            coins: referrerUid ? REFERRAL_REWARD_REFEREE : 0,
-            totalCoins: referrerUid ? REFERRAL_REWARD_REFEREE : 0,
-            energy: INITIAL_ENERGY,
-            maxEnergy: LEVELS[0].maxEnergy,
-            lastEnergyUpdate: Date.now(),
-            passiveIncomeRate: LEVELS[0].passiveRate, 
-            lastPassiveIncomeUpdate: Date.now(),
-            walletAddress: null,
-            referralCode: targetUid, 
-            referredBy: referrerUid,
-            referralCount: 0,
-            completedTasks: [],
-            lastDailyReward: null,
-            dailyStreak: 0,
-            level: 1
-          };
+      try {
+        if (fbUser) {
+          const targetUid = fbUser.uid;
+          console.log('User authenticated:', targetUid);
           
-          await setDoc(userRef, newUser);
+          const userRef = doc(db, 'users', targetUid);
+          const userSnap = await getDoc(userRef);
 
-          // If there's a referrer, update their stats
-          if (referrerUid) {
-            try {
-              const referrerRef = doc(db, 'users', referrerUid);
-              const referrerSnap = await getDoc(referrerRef);
-              if (referrerSnap.exists()) {
+          if (userSnap.exists()) {
+            setUser(userSnap.data() as UserData);
+          } else {
+            // Check for referrer
+            const startParam = tgData.startParam;
+            let referrerUid = null;
+            if (startParam && startParam.startsWith('ref_')) {
+              const potentialReferrerId = startParam.replace('ref_', '');
+              if (potentialReferrerId !== fbUser.uid) {
+                referrerUid = potentialReferrerId;
+              }
+            }
+
+            const newUser: UserData = {
+              uid: targetUid,
+              telegramId: tgData.user?.id || 0,
+              username: tgData.user?.username || tgData.user?.first_name || 'Player',
+              firstName: tgData.user?.first_name || 'Player',
+              coins: referrerUid ? REFERRAL_REWARD_REFEREE : 0,
+              totalCoins: referrerUid ? REFERRAL_REWARD_REFEREE : 0,
+              energy: INITIAL_ENERGY,
+              maxEnergy: LEVELS[0].maxEnergy,
+              lastEnergyUpdate: Date.now(),
+              passiveIncomeRate: LEVELS[0].passiveRate, 
+              lastPassiveIncomeUpdate: Date.now(),
+              walletAddress: null,
+              referralCode: targetUid, 
+              referredBy: referrerUid,
+              referralCount: 0,
+              completedTasks: [],
+              lastDailyReward: null,
+              dailyStreak: 0,
+              level: 1
+            };
+            
+            await setDoc(userRef, newUser);
+
+            if (referrerUid) {
+              try {
+                const referrerRef = doc(db, 'users', referrerUid);
                 await updateDoc(referrerRef, {
                   referralCount: increment(1),
                   coins: increment(REFERRAL_REWARD_REFERRER),
                   totalCoins: increment(REFERRAL_REWARD_REFERRER)
                 });
-                console.log('Referrer rewarded!');
+              } catch (err) {
+                console.error('Failed to reward referrer:', err);
               }
-            } catch (err) {
-              console.error('Failed to reward referrer:', err);
             }
-          }
 
-          setUser(newUser);
+            setUser(newUser);
+          }
+        } else {
+          console.log('No user, signing in anonymously...');
+          await signInAnonymously(auth);
         }
+      } catch (err) {
+        console.error('Initialization error:', err);
+      } finally {
+        // Ensure loading is always stopped after attempt
         setLoading(false);
-      } else {
-        signInAnonymously(auth);
       }
     });
 
     return () => unsub();
-  }, []);
+  }, [tgData.user?.id]);
 
   // Energy Refill & Passive Income Ticker
   useEffect(() => {

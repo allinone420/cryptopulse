@@ -291,6 +291,9 @@ export default function App() {
                   alt="SatoCryp" 
                   className="w-full h-full object-cover select-none pointer-events-none opacity-90"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1621761191319-c6fb62004040?q=80&w=1000&auto=format&fit=crop";
+                  }}
                 />
                </div>
             </div>
