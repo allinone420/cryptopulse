@@ -30,7 +30,7 @@ const metadata = {
   name: 'SatoCryp',
   description: 'Tap to earn crypto and connect your wallet',
   url: window.location.origin || 'https://satocryp.com', 
-  icons: ['https://raw.githubusercontent.com/allinone420/cryptopulse/refs/heads/main/public/logo.png']
+  icons: ['https://i.ibb.co.com/0ywpgL4q/logo.webp']
 };
 
 export const web3Modal = createWeb3Modal({
