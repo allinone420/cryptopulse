@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Coins, Zap, Trophy, Users, CheckCircle2, Wallet, RefreshCw } from 'lucide-react';
+import { Coins, Zap, Trophy, Users, CheckCircle2, Wallet, RefreshCw, Settings } from 'lucide-react';
 import { TonConnectButton } from '@tonconnect/ui-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LEVELS } from '../lib/constants';
@@ -53,7 +53,16 @@ export const Header = ({ user }: { user: any; syncing: boolean; setUser: React.D
         </div>
       </div>
       
-      <TonConnectButton />
+      <div className="flex items-center gap-2">
+        <button 
+          onClick={() => window.location.href = window.location.pathname + '?admin'}
+          className="p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors text-text-secondary"
+          title="Admin Panel"
+        >
+          <Settings size={18} />
+        </button>
+        <TonConnectButton />
+      </div>
     </header>
   );
 };

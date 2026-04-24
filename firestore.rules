@@ -40,8 +40,10 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.level >= 10 || 
-         (request.auth.token.email == "md.khotiborrahman@gmail.com" && request.auth.token.email_verified == true));
+        (
+          request.auth.token.email == "md.khotiborrahman@gmail.com" ||
+          request.auth.uid == "exJ8T8grBxVQPmIdQXJu5259dFl2"
+        );
     }
 
     function isValidUser(data) {
@@ -57,22 +59,13 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
       
       allow get: if isAuthenticated();
-      allow list: if isAuthenticated() && request.query.limit <= 50;
+      allow list: if isAdmin() || (isAuthenticated() && request.query.limit <= 100);
 
-      allow update: if isAuthenticated() && isOwner(userId) &&
+      allow update: if isAuthenticated() && (isAdmin() || (isOwner(userId) &&
                       // Immortals
                       request.resource.data.uid == resource.data.uid &&
                       request.resource.data.telegramId == resource.data.telegramId &&
-                      (
-                        // Action: Level Up
-                        // If level increases, we allow coins to decrease (spending)
-                        (request.resource.data.level > resource.data.get('level', 0)) ||
-                        // Action: Standard Play
-                        // If level stays same, we normally expect coins not to decrease significantly 
-                        // but let's be flexible for now to fix the blocking error
-                        (request.resource.data.level == resource.data.get('level', 0))
-                      ) &&
-                      isValidUser(request.resource.data);
+                      isValidUser(request.resource.data)));
                       
       allow delete: if isAdmin();
     }

@@ -1,6 +1,6 @@
 {
   "name": "SatoCryp",
-  "description": "SatoCryp is a premier Telegram Mini App tap-to-earn game inspired by the legacy of Satoshi. Features real-time leaderboards, referral rewards, and passive crypto income mechanics.",
+  "description": "SatoCryp is a premier Telegram Mini App tap-to-earn game with a robust admin dashboard for real-time user management, platform analytics, and a secure authentication system.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

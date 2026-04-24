@@ -1,49 +1,184 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
-import { collection, getDocs, query, orderBy, deleteDoc, doc, where, Timestamp } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
+import { collection, getDocs, query, orderBy, deleteDoc, doc, where, Timestamp, getCountFromServer, limit } from 'firebase/firestore';
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { UserData } from '../types/game';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, BarChart3, List, Trash2, X, Menu, Search, LogOut, ChevronRight, Calendar } from 'lucide-react';
+import { Users, BarChart3, List, Trash2, X, Menu, Search, LogOut, ChevronRight, Calendar, Lock, Mail } from 'lucide-react';
 
 export default function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [adminUser, setAdminUser] = useState<any>(null);
   const [totalUsers, setTotalUsers] = useState(0);
   const [activeUsers, setActiveUsers] = useState(0);
+  const [totalCoins, setTotalCoins] = useState(0);
+  const [totalReferrals, setTotalReferrals] = useState(0);
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'users'>('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
 
-  const ADMIN_PASSWORD = "SATO_ADMIN_SECRET_2026"; // Changeable
+  const ADMIN_EMAILS = ["md.khotiborrahman@gmail.com"];
+  const ADMIN_UIDS = ["exJ8T8grBxVQPmIdQXJu5259dFl2"];
 
-  const handleLogin = (e: React.FormEvent) => {
+  const checkIsAdmin = (user: any) => {
+    if (!user) return false;
+    if (user.isAnonymous) return false;
+    return ADMIN_EMAILS.includes(user.email) || ADMIN_UIDS.includes(user.uid);
+  };
+
+  useEffect(() => {
+    if (!auth) return;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user && !user.isAnonymous) {
+        setAdminUser(user);
+        // Only auto-authenticate if they fulfill admin criteria
+        if (checkIsAdmin(user)) {
+          setIsAuthenticated(true);
+          fetchStats();
+        } else {
+          // If logged in but not admin, stay on login screen but show email
+          setIsAuthenticated(false);
+          setError(`Account ${user.email} is not authorized for admin access.`);
+        }
+      } else {
+        setIsAuthenticated(false);
+        setAdminUser(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const formatNumber = (num: number) => {
+    if (num >= 1000000000) return (num / 1000000000).toFixed(2) + 'B';
+    if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
+    return Math.floor(num).toString();
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === ADMIN_PASSWORD) {
-      setIsAuthenticated(true);
-      fetchStats();
-    } else {
-      alert("Invalid Admin Password");
+    setLoading(true);
+    setError(null);
+    try {
+      if (!auth) throw new Error("Auth not initialized");
+      
+      // Explicitly sign out any current user (including anonymous) before trying admin login
+      // to avoid 'auth/network-request-failed' which can happen during session conflicts
+      if (auth.currentUser) {
+        await signOut(auth);
+      }
+      
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      
+      if (checkIsAdmin(user)) {
+        setIsAuthenticated(true);
+        fetchStats();
+      } else {
+        // If not an admin, sign out immediately
+        await signOut(auth);
+        throw new Error("Access Denied: This account is not listed as an administrator.");
+      }
+    } catch (err: any) {
+      console.error("Login failed:", err);
+      let msg = "Invalid credentials";
+      if (err.code === "auth/user-not-found") msg = "No administrator account found with this email.";
+      if (err.code === "auth/wrong-password") msg = "Incorrect password.";
+      if (err.code === "auth/network-request-failed") msg = "Network error. Please check your connection and try again.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setIsAuthenticated(false);
+      setUsers([]);
+      setAdminUser(null);
+    } catch (err) {
+      console.error("Logout failed:", err);
     }
   };
 
   const fetchStats = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const q = query(collection(db, 'users'), orderBy('totalCoins', 'desc'));
+      if (!db) throw new Error("Database not initialized");
+      
+      // Get Total User Count
+      const coll = collection(db, 'users');
+      const countSnapshot = await getCountFromServer(coll);
+      setTotalUsers(countSnapshot.data().count);
+
+      // Get Top Users (for the list)
+      const q = query(collection(db, 'users'), orderBy('totalCoins', 'desc'), limit(100));
       const snap = await getDocs(q);
       const allUsers = snap.docs.map(doc => doc.data() as UserData);
       setUsers(allUsers);
-      setTotalUsers(allUsers.length);
+      
+      // Calculate Aggregates (from top users as a sample)
+      let coins = 0;
+      let refs = 0;
+      allUsers.forEach(u => {
+        coins += (u.totalCoins || 0);
+        refs += (u.referralCount || 0);
+      });
+      setTotalCoins(coins);
+      setTotalReferrals(refs);
       
       // Calculate Active Users (Last 24h)
       const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
       const active = allUsers.filter(u => u.lastActive && u.lastActive > oneDayAgo);
       setActiveUsers(active.length);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch admin data:", err);
+      setError(err.message || "Failed to load dashboard data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const performSearch = async () => {
+    if (!searchTerm.trim()) {
+      fetchStats();
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Search by Telegram ID (if numeric) or Username
+      let q;
+      if (!isNaN(Number(searchTerm))) {
+        q = query(collection(db, 'users'), where('telegramId', '==', Number(searchTerm)));
+      } else {
+        // Simple username search (case sensitive and exact or prefix depends on implementation)
+        // For case-insensitive we'd need a normalized field, but telegramId is better for exact
+        q = query(collection(db, 'users'), where('username', '==', searchTerm));
+      }
+      
+      const snap = await getDocs(q);
+      const foundUsers = snap.docs.map(doc => doc.data() as UserData);
+      
+      if (foundUsers.length === 0 && searchTerm.length > 5) {
+        // Try searching by UID if it looks like one
+        const uidSnap = await getDocs(query(collection(db, 'users'), where('uid', '==', searchTerm)));
+        const foundByUid = uidSnap.docs.map(doc => doc.data() as UserData);
+        setUsers(foundByUid);
+      } else {
+        setUsers(foundUsers);
+      }
+    } catch (err: any) {
+      console.error("Search failed:", err);
+      setError(err.message || "Search failed");
     } finally {
       setLoading(false);
     }
@@ -88,16 +223,40 @@ export default function AdminPanel() {
             </div>
           </div>
           
+          {error && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-bold text-center animate-pulse">
+              {error}
+            </div>
+          )}
+          
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
-            <input 
-              type="password" 
-              placeholder="Enter Access Key"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 p-4 rounded-xl text-white outline-none focus:border-accent-gold transition-colors"
-            />
-            <button className="w-full bg-accent-gold text-black py-4 rounded-xl font-black uppercase text-sm tracking-widest shadow-xl shadow-accent-gold/20">
-              Access Dashboard
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
+              <input 
+                type="email" 
+                placeholder="Admin Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 pl-12 pr-4 py-4 rounded-xl text-white outline-none focus:border-accent-gold transition-colors"
+                required
+              />
+            </div>
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
+              <input 
+                type="password" 
+                placeholder="Admin Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 pl-12 pr-4 py-4 rounded-xl text-white outline-none focus:border-accent-gold transition-colors"
+                required
+              />
+            </div>
+            <button 
+              disabled={loading}
+              className="w-full bg-accent-gold text-black py-4 rounded-xl font-black uppercase text-sm tracking-widest shadow-xl shadow-accent-gold/20 disabled:opacity-50"
+            >
+              {loading ? 'Authenticating...' : 'Access Dashboard'}
             </button>
           </form>
         </motion.div>
@@ -155,9 +314,9 @@ export default function AdminPanel() {
             <div className="mt-auto pt-6 border-t border-white/10 flex flex-col gap-4">
               <div className="p-4 bg-white/5 rounded-xl text-center">
                 <p className="text-[10px] text-text-secondary uppercase">Connected as</p>
-                <p className="text-xs font-bold truncate">Root Administrator</p>
+                <p className="text-xs font-bold truncate">{adminUser?.email || 'Administrator'}</p>
               </div>
-              <button onClick={() => setIsAuthenticated(false)} className="flex items-center justify-center gap-2 text-red-400 font-bold p-3 rounded-xl hover:bg-red-400/10 text-sm">
+              <button onClick={handleLogout} className="flex items-center justify-center gap-2 text-red-400 font-bold p-3 rounded-xl hover:bg-red-400/10 text-sm">
                 <LogOut size={16} /> Logout
               </button>
             </div>
@@ -175,36 +334,67 @@ export default function AdminPanel() {
 
       {/* Main Content */}
       <main className="flex-1 p-6 md:p-10 overflow-y-auto max-h-screen">
-        {activeTab === 'dashboard' ? (
+        {error && (
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Error: {error}</p>
+              <button onClick={fetchStats} className="text-[10px] font-black uppercase tracking-widest bg-red-500 text-white px-3 py-1 rounded-lg">Retry</button>
+            </div>
+            <p className="text-[10px] opacity-50">Auth Status: {isAuthenticated ? `Logged in as ${adminUser?.email}` : 'Not logged in'}</p>
+          </div>
+        )}
+
+        {loading && !users.length ? (
+          <div className="flex items-center justify-center h-64">
+             <div className="w-8 h-8 border-2 border-accent-gold border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : activeTab === 'dashboard' ? (
           <div className="flex flex-col gap-8">
-            <header>
-              <h1 className="text-3xl font-black italic uppercase tracking-tighter">Dashboard</h1>
-              <p className="text-text-secondary italic">Real-time platform overview</p>
+            <header className="flex justify-between items-end">
+              <div>
+                <h1 className="text-3xl font-black italic uppercase tracking-tighter">Dashboard</h1>
+                <p className="text-text-secondary italic">Real-time platform overview</p>
+              </div>
+              <button 
+                onClick={fetchStats}
+                disabled={loading}
+                className="p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-50"
+              >
+                <Calendar className={loading ? 'animate-spin' : ''} size={18} />
+              </button>
             </header>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="bg-card-bg p-6 rounded-3xl border border-white/10 flex flex-col gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-card-bg p-6 rounded-3xl border border-white/10 flex flex-col gap-2 shadow-xl">
                 <div className="w-10 h-10 bg-blue-500/20 text-blue-400 rounded-xl flex items-center justify-center">
                   <Users size={20} />
                 </div>
-                <p className="text-text-secondary text-sm font-bold uppercase tracking-widest mt-2">Total Users</p>
-                <div className="text-4xl font-black">{totalUsers.toLocaleString()}</div>
+                <p className="text-text-secondary text-[10px] font-black uppercase tracking-widest mt-2">Total Users</p>
+                <div className="text-3xl font-black">{totalUsers.toLocaleString()}</div>
               </div>
 
-              <div className="bg-card-bg p-6 rounded-3xl border border-white/10 flex flex-col gap-2">
+              <div className="bg-card-bg p-6 rounded-3xl border border-white/10 flex flex-col gap-2 shadow-xl">
                 <div className="w-10 h-10 bg-green-500/20 text-green-400 rounded-xl flex items-center justify-center">
                   <Calendar size={20} />
                 </div>
-                <p className="text-text-secondary text-sm font-bold uppercase tracking-widest mt-2">Daily Active (DAU)</p>
-                <div className="text-4xl font-black">{activeUsers.toLocaleString()}</div>
+                <p className="text-text-secondary text-[10px] font-black uppercase tracking-widest mt-2">DAU (Top 100)</p>
+                <div className="text-3xl font-black">{activeUsers.toLocaleString()}</div>
               </div>
 
-              <div className="bg-card-bg p-6 rounded-3xl border border-white/10 flex flex-col gap-2">
+              <div className="bg-card-bg p-6 rounded-3xl border border-white/10 flex flex-col gap-2 shadow-xl">
                 <div className="w-10 h-10 bg-accent-gold/20 text-accent-gold rounded-xl flex items-center justify-center">
-                  <ChevronRight size={20} />
+                  <BarChart3 size={20} />
                 </div>
-                <p className="text-text-secondary text-sm font-bold uppercase tracking-widest mt-2">Status</p>
-                <div className="text-4xl font-black text-green-400">Live</div>
+                <p className="text-text-secondary text-[10px] font-black uppercase tracking-widest mt-2">Total System Coins</p>
+                <div className="text-3xl font-black text-accent-gold">{formatNumber(totalCoins)}</div>
+              </div>
+
+              <div className="bg-card-bg p-6 rounded-3xl border border-white/10 flex flex-col gap-2 shadow-xl">
+                <div className="w-10 h-10 bg-purple-500/20 text-purple-400 rounded-xl flex items-center justify-center">
+                  <Users size={20} />
+                </div>
+                <p className="text-text-secondary text-[10px] font-black uppercase tracking-widest mt-2">Referrals (Top 100)</p>
+                <div className="text-3xl font-black font-mono">{formatNumber(totalReferrals)}</div>
               </div>
             </div>
 
@@ -227,15 +417,24 @@ export default function AdminPanel() {
                 <h1 className="text-3xl font-black italic uppercase tracking-tighter">User Management</h1>
                 <p className="text-text-secondary italic">Manage and monitor all participants</p>
               </div>
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
-                <input 
-                  type="text" 
-                  placeholder="Search Users..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-card-bg border border-white/10 pl-12 pr-6 py-3 rounded-2xl outline-none focus:border-accent-gold transition-all w-full sm:w-64"
-                />
+              <div className="flex gap-2">
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="Search Username or ID..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && performSearch()}
+                    className="bg-card-bg border border-white/10 pl-12 pr-6 py-3 rounded-2xl outline-none focus:border-accent-gold transition-all w-full"
+                  />
+                </div>
+                <button 
+                  onClick={performSearch}
+                  className="bg-accent-gold text-black px-6 py-3 rounded-2xl font-black uppercase text-xs tracking-widest hover:brightness-110 active:scale-95 transition-all"
+                >
+                  Search
+                </button>
               </div>
             </header>
 
@@ -307,42 +506,63 @@ export default function AdminPanel() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-card-bg w-full max-w-lg rounded-3xl border border-white/10 p-8 relative shadow-2xl"
+              className="bg-card-bg w-full max-w-xl rounded-3xl border border-white/10 p-8 relative shadow-2xl overflow-y-auto max-h-[90vh]"
             >
               <button 
                 onClick={() => setSelectedUser(null)}
-                className="absolute top-6 right-6 p-2 bg-white/5 rounded-full"
+                className="absolute top-6 right-6 p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors z-10"
               >
                 <X size={20} />
               </button>
 
-              <div className="flex flex-col gap-8">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-accent-gold/20 text-accent-gold flex items-center justify-center font-black text-2xl">
-                    {selectedUser.username.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-black uppercase tracking-tighter italic">{selectedUser.username}</h2>
-                    <p className="text-text-secondary font-mono text-xs">UID: {selectedUser.uid}</p>
+              <div className="flex flex-col gap-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-accent-gold/20 text-accent-gold flex items-center justify-center font-black text-2xl shadow-inner border border-white/5">
+                      {selectedUser.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black uppercase tracking-tighter italic flex items-center gap-2">
+                        {selectedUser.username}
+                        <div className="flex flex-col items-center">
+                          <span className="bg-gradient-to-r from-accent-gold to-[#ffd700] text-black text-[10px] font-black px-3 py-1 rounded-full shadow-[0_0_20px_rgba(243,186,47,0.4)] border border-white/20">
+                            LEVEL {selectedUser.level}
+                          </span>
+                        </div>
+                      </h2>
+                      <p className="text-text-secondary font-mono text-[10px] tracking-wide mt-1">UID: {selectedUser.uid}</p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                    <p className="text-[10px] text-text-secondary uppercase font-bold mb-1">Total Profits</p>
-                    <p className="text-lg font-black text-accent-gold">{Math.floor(selectedUser.totalCoins).toLocaleString()}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-center min-w-0">
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Total Profits</p>
+                    <p className="text-xl font-black text-accent-gold truncate" title={selectedUser.totalCoins.toString()}>{formatNumber(selectedUser.totalCoins)}</p>
                   </div>
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                    <p className="text-[10px] text-text-secondary uppercase font-bold mb-1">Referrals</p>
-                    <p className="text-lg font-black">{selectedUser.referralCount}</p>
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-center min-w-0">
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Referrals</p>
+                    <p className="text-xl font-black truncate">{selectedUser.referralCount}</p>
                   </div>
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                    <p className="text-[10px] text-text-secondary uppercase font-bold mb-1">Last Active</p>
-                    <p className="text-xs font-bold">{selectedUser.lastActive ? new Date(selectedUser.lastActive).toLocaleString() : 'Never'}</p>
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-center min-w-0">
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Streak / Combo</p>
+                    <p className="text-lg font-black truncate">{selectedUser.dailyStreak} Days</p>
                   </div>
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                    <p className="text-[10px] text-text-secondary uppercase font-bold mb-1">Created At</p>
-                    <p className="text-xs font-bold text-text-secondary">Logged in System</p>
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-center min-w-0">
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Passive Rate</p>
+                    <p className="text-lg font-black text-blue-400 truncate">+{formatNumber(selectedUser.passiveIncomeRate)}/s</p>
+                  </div>
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 col-span-2 overflow-hidden">
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Wallet Address</p>
+                    <p className="text-[10px] font-mono break-all opacity-80">{selectedUser.walletAddress || 'No Wallet Connected'}</p>
+                  </div>
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-center min-w-0">
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Last Active</p>
+                    <p className="text-[9px] font-bold truncate">{selectedUser.lastActive ? new Date(selectedUser.lastActive).toLocaleString() : 'Never'}</p>
+                  </div>
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-center min-w-0">
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Energy</p>
+                    <p className="text-[10px] font-bold truncate">{formatNumber(selectedUser.energy)} / {formatNumber(selectedUser.maxEnergy)}</p>
                   </div>
                 </div>
 
