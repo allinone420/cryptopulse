@@ -13,7 +13,7 @@ import AdminPanel from './components/AdminPanel';
 
 export default function App() {
   const { user, loading, syncing, tap, levelUp, setUser } = useGame();
-  const [isAdminPath, setIsAdminPath] = useState(window.location.pathname === '/admin/control-center-secret');
+  const [isAdminPath, setIsAdminPath] = useState(window.location.pathname.endsWith('/admin/control-center-secret'));
   const [taps, setTaps] = useState<{ id: number; x: number; y: number }[]>([]);
   const [showDaily, setShowDaily] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
@@ -26,7 +26,7 @@ export default function App() {
   // Simple Router based on path
   useEffect(() => {
     const handlePathChange = () => {
-      setIsAdminPath(window.location.pathname === '/admin/control-center-secret');
+      setIsAdminPath(window.location.pathname.endsWith('/admin/control-center-secret'));
     };
     window.addEventListener('popstate', handlePathChange);
     return () => window.removeEventListener('popstate', handlePathChange);
