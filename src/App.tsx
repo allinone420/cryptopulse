@@ -15,8 +15,14 @@ export default function App() {
   const { user, loading, syncing, tap, levelUp, setUser } = useGame();
   
   const checkIsAdmin = () => {
+    const url = window.location.href.toLowerCase();
     const params = new URLSearchParams(window.location.search);
-    return params.has('admin') || window.location.hash === '#admin' || window.location.pathname.endsWith('/admin');
+    return (
+      params.has('admin') || 
+      window.location.hash.includes('admin') || 
+      window.location.pathname.includes('/admin') ||
+      url.includes('?admin')
+    );
   };
 
   const [isAdminPath, setIsAdminPath] = useState(checkIsAdmin());
