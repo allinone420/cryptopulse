@@ -13,7 +13,13 @@ import AdminPanel from './components/AdminPanel';
 
 export default function App() {
   const { user, loading, syncing, tap, levelUp, setUser } = useGame();
-  const [isAdminPath, setIsAdminPath] = useState(window.location.pathname.endsWith('/admin/control-center-secret'));
+  
+  const checkIsAdmin = () => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has('admin') || window.location.hash === '#admin' || window.location.pathname.endsWith('/admin');
+  };
+
+  const [isAdminPath, setIsAdminPath] = useState(checkIsAdmin());
   const [taps, setTaps] = useState<{ id: number; x: number; y: number }[]>([]);
   const [showDaily, setShowDaily] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
@@ -23,13 +29,18 @@ export default function App() {
   const [loadingLeaders, setLoadingLeaders] = useState(false);
   const tapContainerRef = useRef<HTMLDivElement>(null);
 
-  // Simple Router based on path
+  // Simple Router based on path/search/hash
   useEffect(() => {
     const handlePathChange = () => {
-      setIsAdminPath(window.location.pathname.endsWith('/admin/control-center-secret'));
+      setIsAdminPath(checkIsAdmin());
     };
     window.addEventListener('popstate', handlePathChange);
-    return () => window.removeEventListener('popstate', handlePathChange);
+    // Also listen for hash changes
+    window.addEventListener('hashchange', handlePathChange);
+    return () => {
+      window.removeEventListener('popstate', handlePathChange);
+      window.removeEventListener('hashchange', handlePathChange);
+    };
   }, []);
 
   const [activeTab, setActiveTab] = useState('home');
