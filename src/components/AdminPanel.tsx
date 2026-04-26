@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../lib/firebase';
 import { collection, getDocs, query, orderBy, deleteDoc, doc, where, Timestamp, getCountFromServer, limit } from 'firebase/firestore';
-import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from 'firebase/auth';
 import { UserData } from '../types/game';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, BarChart3, List, Trash2, X, Menu, Search, LogOut, ChevronRight, Calendar, Lock, Mail } from 'lucide-react';
+import { Users, BarChart3, List, Trash2, X, Menu, Search, LogOut, ChevronRight, Calendar, Lock, Mail, Zap, Wallet } from 'lucide-react';
 
 export default function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -32,24 +32,50 @@ export default function AdminPanel() {
     return ADMIN_EMAILS.includes(user.email) || ADMIN_UIDS.includes(user.uid);
   };
 
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
   useEffect(() => {
-    if (!auth) return;
+    if (!auth) {
+      setCheckingAuth(false);
+      return;
+    }
+
+    // Safety timeout: If auth hasn't responded in 5 seconds, stop loading
+    const safetyTimeout = setTimeout(() => {
+      setCheckingAuth(false);
+    }, 5000);
+
+    // Immediate check if currentUser is already synchronously available
+    if (auth.currentUser && !auth.currentUser.isAnonymous && !isAuthenticated) {
+      setAdminUser(auth.currentUser);
+      if (checkIsAdmin(auth.currentUser)) {
+        setIsAuthenticated(true);
+        fetchStats();
+      }
+      setCheckingAuth(false);
+      clearTimeout(safetyTimeout);
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      clearTimeout(safetyTimeout);
       if (user && !user.isAnonymous) {
         setAdminUser(user);
         // Only auto-authenticate if they fulfill admin criteria
-        if (checkIsAdmin(user)) {
+        if (checkIsAdmin(user) && !isAuthenticated) {
           setIsAuthenticated(true);
           fetchStats();
-        } else {
+        } else if (!checkIsAdmin(user)) {
           // If logged in but not admin, stay on login screen but show email
           setIsAuthenticated(false);
-          setError(`Account ${user.email} is not authorized for admin access.`);
+          if (user.email && !ADMIN_EMAILS.includes(user.email)) {
+            setError(`Account ${user.email} is not authorized for admin access.`);
+          }
         }
       } else {
         setIsAuthenticated(false);
         setAdminUser(null);
       }
+      setCheckingAuth(false);
     });
     return () => unsubscribe();
   }, []);
@@ -68,30 +94,28 @@ export default function AdminPanel() {
     try {
       if (!auth) throw new Error("Auth not initialized");
       
-      // Explicitly sign out any current user (including anonymous) before trying admin login
-      // to avoid 'auth/network-request-failed' which can happen during session conflicts
-      if (auth.currentUser) {
-        await signOut(auth);
-      }
+      // Use session persistence for better reliability in sandboxed iframes
+      await setPersistence(auth, browserSessionPersistence);
       
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
       
       if (checkIsAdmin(user)) {
         setIsAuthenticated(true);
         fetchStats();
       } else {
-        // If not an admin, sign out immediately
+        // If not an admin, we must sign out to prevent the session from persisting
         await signOut(auth);
-        throw new Error("Access Denied: This account is not listed as an administrator.");
+        throw new Error("Access Denied: Your account (" + user.email + ") is not listed as an administrator.");
       }
     } catch (err: any) {
       console.error("Login failed:", err);
       let msg = "Invalid credentials";
       if (err.code === "auth/user-not-found") msg = "No administrator account found with this email.";
       if (err.code === "auth/wrong-password") msg = "Incorrect password.";
-      if (err.code === "auth/network-request-failed") msg = "Network error. Please check your connection and try again.";
-      setError(msg);
+      if (err.code === "auth/network-request-failed") msg = "Network/Connect error. Please check your internet and try again. If the problem persists, wait 30 seconds and refresh.";
+      if (err.code === "auth/too-many-requests") msg = "Too many failed attempts. Please wait a few minutes before trying again.";
+      setError(err.message || msg);
     } finally {
       setLoading(false);
     }
@@ -204,6 +228,15 @@ export default function AdminPanel() {
     u.uid.includes(searchTerm) ||
     u.telegramId.toString().includes(searchTerm)
   );
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-[#0a0b0d] flex flex-col items-center justify-center gap-4">
+         <div className="w-10 h-10 border-4 border-accent-gold border-t-transparent rounded-full animate-spin" />
+         <p className="text-accent-gold/60 text-[10px] font-black uppercase tracking-[0.2em] animate-pulse">Verifying Admin Session...</p>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -386,15 +419,15 @@ export default function AdminPanel() {
                   <BarChart3 size={20} />
                 </div>
                 <p className="text-text-secondary text-[10px] font-black uppercase tracking-widest mt-2">Total System Coins</p>
-                <div className="text-3xl font-black text-accent-gold">{formatNumber(totalCoins)}</div>
+                <div className="text-2xl md:text-3xl font-black text-accent-gold truncate" title={totalCoins.toLocaleString()}>{formatNumber(totalCoins)}</div>
               </div>
 
               <div className="bg-card-bg p-6 rounded-3xl border border-white/10 flex flex-col gap-2 shadow-xl">
                 <div className="w-10 h-10 bg-purple-500/20 text-purple-400 rounded-xl flex items-center justify-center">
                   <Users size={20} />
                 </div>
-                <p className="text-text-secondary text-[10px] font-black uppercase tracking-widest mt-2">Referrals (Top 100)</p>
-                <div className="text-3xl font-black font-mono">{formatNumber(totalReferrals)}</div>
+                <p className="text-text-secondary text-[10px] font-black uppercase tracking-widest mt-2">Total Referrals</p>
+                <div className="text-2xl md:text-3xl font-black font-mono truncate" title={totalReferrals.toLocaleString()}>{formatNumber(totalReferrals)}</div>
               </div>
             </div>
 
@@ -464,7 +497,7 @@ export default function AdminPanel() {
                              </div>
                            </div>
                          </td>
-                         <td className="p-6 font-mono font-bold text-accent-gold">{Math.floor(user.coins).toLocaleString()}</td>
+                         <td className="p-6 font-mono font-bold text-accent-gold">{formatNumber(user.totalCoins || user.coins || 0)}</td>
                          <td className="p-6">
                            <span className="bg-white/10 px-3 py-1 rounded-full text-[10px] font-black">Level {user.level}</span>
                          </td>
@@ -535,34 +568,62 @@ export default function AdminPanel() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-center min-w-0">
-                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Total Profits</p>
-                    <p className="text-xl font-black text-accent-gold truncate" title={selectedUser.totalCoins.toString()}>{formatNumber(selectedUser.totalCoins)}</p>
+                <div className="grid grid-cols-2 gap-3 md:gap-4">
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col justify-center min-w-0 relative group overflow-hidden">
+                    <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                      <BarChart3 size={24} />
+                    </div>
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1 tracking-wider">Total Profits</p>
+                    <p className="text-xl md:text-2xl font-black text-accent-gold truncate" title={selectedUser.totalCoins.toLocaleString()}>
+                      {formatNumber(selectedUser.totalCoins)}
+                    </p>
                   </div>
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-center min-w-0">
-                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Referrals</p>
-                    <p className="text-xl font-black truncate">{selectedUser.referralCount}</p>
+                  
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col justify-center min-w-0 relative group overflow-hidden">
+                    <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                      <Users size={24} />
+                    </div>
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1 tracking-wider">Referrals</p>
+                    <p className="text-xl md:text-2xl font-black truncate">{selectedUser.referralCount}</p>
                   </div>
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-center min-w-0">
-                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Streak / Combo</p>
-                    <p className="text-lg font-black truncate">{selectedUser.dailyStreak} Days</p>
+
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col justify-center min-w-0 relative group overflow-hidden">
+                    <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                      <Calendar size={24} />
+                    </div>
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1 tracking-wider">Streak</p>
+                    <p className="text-lg md:text-xl font-black truncate">{selectedUser.dailyStreak} Days</p>
                   </div>
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-center min-w-0">
-                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Passive Rate</p>
-                    <p className="text-lg font-black text-blue-400 truncate">+{formatNumber(selectedUser.passiveIncomeRate)}/s</p>
+
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col justify-center min-w-0 relative group overflow-hidden">
+                    <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+                      <Zap size={24} className="text-blue-400" />
+                    </div>
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1 tracking-wider">Passive Rate</p>
+                    <p className="text-lg md:text-xl font-black text-blue-400 truncate">+{formatNumber(selectedUser.passiveIncomeRate)}/s</p>
                   </div>
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 col-span-2 overflow-hidden">
-                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Wallet Address</p>
-                    <p className="text-[10px] font-mono break-all opacity-80">{selectedUser.walletAddress || 'No Wallet Connected'}</p>
+
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/10 col-span-2 overflow-hidden bg-gradient-to-br from-white/[0.02] to-transparent">
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-2 tracking-wider flex items-center gap-2">
+                       <Wallet size={12} /> Wallet Address
+                    </p>
+                    <p className="text-[10px] md:text-xs font-mono break-all opacity-80 bg-black/20 p-3 rounded-xl border border-white/5">
+                      {selectedUser.walletAddress || 'No Wallet Connected'}
+                    </p>
                   </div>
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-center min-w-0">
-                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Last Active</p>
-                    <p className="text-[9px] font-bold truncate">{selectedUser.lastActive ? new Date(selectedUser.lastActive).toLocaleString() : 'Never'}</p>
+
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col justify-center min-w-0">
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1 tracking-wider">Last Active</p>
+                    <p className="text-[10px] md:text-xs font-bold truncate opacity-80">
+                      {selectedUser.lastActive ? new Date(selectedUser.lastActive).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Never'}
+                    </p>
                   </div>
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col justify-center min-w-0">
-                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1">Energy</p>
-                    <p className="text-[10px] font-bold truncate">{formatNumber(selectedUser.energy)} / {formatNumber(selectedUser.maxEnergy)}</p>
+
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col justify-center min-w-0">
+                    <p className="text-[10px] text-text-secondary uppercase font-black mb-1 tracking-wider">Energy</p>
+                    <p className="text-[10px] md:text-xs font-bold truncate bg-white/5 px-2 py-1 rounded-lg w-fit">
+                      {formatNumber(selectedUser.energy)} / {formatNumber(selectedUser.maxEnergy)}
+                    </p>
                   </div>
                 </div>
 

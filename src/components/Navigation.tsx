@@ -54,13 +54,6 @@ export const Header = ({ user }: { user: any; syncing: boolean; setUser: React.D
       </div>
       
       <div className="flex items-center gap-2">
-        <button 
-          onClick={() => window.location.href = window.location.pathname + '?admin'}
-          className="p-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors text-text-secondary"
-          title="Admin Panel"
-        >
-          <Settings size={18} />
-        </button>
         <TonConnectButton />
       </div>
     </header>
