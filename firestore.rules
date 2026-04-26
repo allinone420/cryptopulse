@@ -1,72 +1,76 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    // Collection: users
-    // Document ID: {userId} (Firebase Auth UID)
-    // Fields:
-    //   - uid: string (required)
-    //   - telegramId: number (required)
-    //   - username: string
-    //   - firstName: string
-    //   - coins: number (required)
-    //   - totalCoins: number
-    //   - energy: number (required)
-    //   - maxEnergy: number
-    //   - lastEnergyUpdate: number (timestamp ms)
-    //   - passiveIncomeRate: number
-    //   - lastPassiveIncomeUpdate: number
-    //   - walletAddress: string
-    //   - referralCode: string (required, unique)
-    //   - referredBy: string (uid)
-    //   - referralCount: number
-    //   - completedTasks: list
-    //   - lastDailyReward: number
-    //   - dailyStreak: number
-    //   - level: number
+    // Default Deny
+    match /{document=**} { allow read, write: if false; }
 
     // ===============================================================
-    // Helper Functions
+    // Global Helpers
     // ===============================================================
-    function isAuthenticated() {
-      return request.auth != null;
-    }
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     
-    function isOwner(userId) {
-      return isAuthenticated() && (request.auth.uid == userId || userId == 'global_shared_guest');
+    function isAdmin() { 
+      return isSignedIn() && (
+        request.auth.token.email == "md.khotiborrahman@gmail.com" ||
+        request.auth.uid == "exJ8T8grBxVQPmIdQXJu5259dFl2"
+      );
     }
 
-    function isAdmin() {
-      return isAuthenticated() && 
-        (
-          request.auth.token.email == "md.khotiborrahman@gmail.com" ||
-          request.auth.uid == "exJ8T8grBxVQPmIdQXJu5259dFl2"
-        );
-    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
 
+    // ===============================================================
+    // User Validation
+    // ===============================================================
     function isValidUser(data) {
-      return data.uid is string &&
+      return data.uid is string && data.uid.size() <= 128 &&
              data.telegramId is number &&
              data.coins is number &&
              data.energy is number &&
+             data.maxEnergy is number &&
              data.level is number &&
-             data.maxEnergy is number;
+             data.referralCode is string &&
+             data.referralCode.size() <= 128;
     }
 
     match /users/{userId} {
-      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
+      allow get: if isSignedIn();
+      allow list: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
       
-      allow get: if isAuthenticated();
-      allow list: if isAdmin() || (isAuthenticated() && request.query.limit <= 100);
+      allow create: if isSignedIn() && 
+                      isOwner(userId) && 
+                      isValidId(userId) &&
+                      isValidUser(incoming()) &&
+                      incoming().uid == request.auth.uid;
 
-      allow update: if isAuthenticated() && (isAdmin() || (isOwner(userId) &&
-                      // Immortals
-                      request.resource.data.uid == resource.data.uid &&
-                      request.resource.data.telegramId == resource.data.telegramId &&
-                      isValidUser(request.resource.data)));
-                      
+      allow update: if isSignedIn() && (
+        isAdmin() || (
+          isOwner(userId) && 
+          isValidUser(incoming()) &&
+          // Immortals
+          incoming().uid == existing().uid &&
+          incoming().telegramId == existing().telegramId &&
+          incoming().referralCode == existing().referralCode &&
+          // State transition integrity
+          (
+            // Action: Sync (Incremental updates to coins/energy)
+            incoming().diff(existing()).affectedKeys().hasAny(['coins', 'totalCoins', 'energy', 'lastActive', 'lastEnergyUpdate', 'lastPassiveIncomeUpdate', 'lastDailyReward', 'dailyStreak']) ||
+            // Action: Wallet Update
+            incoming().diff(existing()).affectedKeys().hasOnly(['walletAddress']) ||
+            // Action: Level Up
+            (incoming().level == existing().level + 1 && incoming().diff(existing()).affectedKeys().hasAny(['level', 'maxEnergy', 'passiveIncomeRate', 'coins', 'energy']))
+          )
+        ) || (
+          // Action: Referral Reward (Allow others to increment specific fields)
+          isSignedIn() && 
+          incoming().diff(existing()).affectedKeys().hasOnly(['referralCount', 'coins', 'totalCoins']) &&
+          incoming().referralCount == existing().referralCount + 1 &&
+          incoming().coins > existing().coins
+        )
+      );
+
       allow delete: if isAdmin();
     }
   }

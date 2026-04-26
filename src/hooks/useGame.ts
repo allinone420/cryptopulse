@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import WebApp from '@twa-dev/sdk';
 import { auth, db } from '../lib/firebase';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, serverTimestamp, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, getDocFromServer } from 'firebase/firestore';
 import { initTelegram, hapticFeedback } from '../lib/telegram';
 import { UserData } from '../types/game';
-import { INITIAL_ENERGY, ENERGY_REFILL_RATE, COINS_PER_TAP, LEVELS, REFERRAL_REWARD_REFERRER, REFERRAL_REWARD_REFEREE } from '../lib/constants';
+import { INITIAL_ENERGY, ENERGY_REFILL_RATE, LEVELS, REFERRAL_REWARD_REFERRER, REFERRAL_REWARD_REFEREE } from '../lib/constants';
 import { useWeb3ModalAccount } from '@web3modal/ethers5/react';
+import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 
 export const useGame = () => {
   const [user, setUser] = useState<UserData | null>(null);
@@ -29,6 +30,22 @@ export const useGame = () => {
     startParam: WebApp?.initDataUnsafe?.start_param,
   };
 
+  // Connection Test & Init
+  useEffect(() => {
+    const testConnection = async () => {
+      try {
+        if (db) {
+          await getDocFromServer(doc(db, 'test', 'connection'));
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration or internet connection.");
+        }
+      }
+    };
+    testConnection();
+  }, []);
+
   // Auth & Initial Data Fetch
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
@@ -39,7 +56,13 @@ export const useGame = () => {
         if (fbUser) {
           const targetUid = fbUser.uid;
           const userRef = doc(db, 'users', targetUid);
-          const userSnap = await getDoc(userRef);
+          let userSnap;
+          try {
+            userSnap = await getDoc(userRef);
+          } catch (err) {
+            handleFirestoreError(err, OperationType.GET, `users/${targetUid}`);
+            return;
+          }
 
           if (userSnap.exists()) {
             const data = userSnap.data() as UserData;
@@ -87,7 +110,11 @@ export const useGame = () => {
               level: 1
             };
             
-            await setDoc(userRef, newUser);
+            try {
+              await setDoc(userRef, newUser);
+            } catch (err) {
+              handleFirestoreError(err, OperationType.CREATE, `users/${targetUid}`);
+            }
 
             // Reward the referrer
             if (referrerUid) {
@@ -99,6 +126,7 @@ export const useGame = () => {
                   totalCoins: increment(REFERRAL_REWARD_REFERRER)
                 });
               } catch (err) {
+                // Referral reward might fail if the referrer UID is invalid
                 console.error('Failed to reward referrer:', err);
               }
             }
@@ -107,7 +135,14 @@ export const useGame = () => {
           }
         } else {
           // If no Firebase user, attempt to sign in
-          await signInAnonymously(auth);
+          // Skip anonymous login if we are on the admin page to avoid creating excessive guest accounts
+          const isAdminPage = window.location.search.includes('admin') || 
+                            window.location.hash.includes('admin') || 
+                            window.location.pathname.includes('/admin');
+          
+          if (!isAdminPage) {
+            await signInAnonymously(auth);
+          }
         }
       } catch (err) {
         console.error('Initialization error:', err);
@@ -164,9 +199,16 @@ export const useGame = () => {
   // Sync Wallet to User Doc
   useEffect(() => {
     if (user && isConnected && address && user.walletAddress !== address) {
-      setUser(prev => prev ? ({ ...prev, walletAddress: address }) : null);
-      const userRef = doc(db, 'users', user.uid);
-      updateDoc(userRef, { walletAddress: address });
+      const updateWallet = async () => {
+        try {
+          setUser(prev => prev ? ({ ...prev, walletAddress: address }) : null);
+          const userRef = doc(db, 'users', user.uid);
+          await updateDoc(userRef, { walletAddress: address });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
+        }
+      };
+      updateWallet();
     }
   }, [isConnected, address, user?.uid]);
 
@@ -192,7 +234,7 @@ export const useGame = () => {
           lastActive: Date.now()
         });
       } catch (err) {
-        console.error('Sync failed:', err);
+        handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
       } finally {
         setSyncing(false);
       }
@@ -244,15 +286,15 @@ export const useGame = () => {
       try {
         const userRef = doc(db, 'users', user.uid);
         await updateDoc(userRef, {
-          coins: newUser.coins,
+          coins: Math.floor(newUser.coins),
           level: newUser.level,
           maxEnergy: newUser.maxEnergy,
           passiveIncomeRate: newUser.passiveIncomeRate,
-          energy: newUser.energy
+          energy: Math.floor(newUser.energy)
         });
         hapticFeedback();
       } catch (err) {
-        console.error('Level upgrade failed:', err);
+        handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
       }
     }
   }, [user]);

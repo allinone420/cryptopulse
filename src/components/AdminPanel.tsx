@@ -5,6 +5,7 @@ import { signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence
 import { UserData } from '../types/game';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, BarChart3, List, Trash2, X, Menu, Search, LogOut, ChevronRight, Calendar, Lock, Mail, Zap, Wallet } from 'lucide-react';
+import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 
 export default function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -110,12 +111,20 @@ export default function AdminPanel() {
       }
     } catch (err: any) {
       console.error("Login failed:", err);
-      let msg = "Invalid credentials";
+      let msg = "Invalid login credentials.";
       if (err.code === "auth/user-not-found") msg = "No administrator account found with this email.";
-      if (err.code === "auth/wrong-password") msg = "Incorrect password.";
-      if (err.code === "auth/network-request-failed") msg = "Network/Connect error. Please check your internet and try again. If the problem persists, wait 30 seconds and refresh.";
-      if (err.code === "auth/too-many-requests") msg = "Too many failed attempts. Please wait a few minutes before trying again.";
-      setError(err.message || msg);
+      else if (err.code === "auth/wrong-password") msg = "Incorrect password.";
+      else if (err.code === "auth/invalid-credential") msg = "The email or password you entered is incorrect.";
+      else if (err.code === "auth/network-request-failed") msg = "Network error. Please check your connection.";
+      else if (err.code === "auth/too-many-requests") msg = "Access blocked due to many failed attempts. Try again later.";
+      else if (err.message) {
+        // Strip Firebase prefix if present
+        msg = err.message.replace(/^Firebase:\s*Error\s*\(([^)]+)\)\.?\s*/i, '$1').replace(/-/g, ' ');
+        // Capitalize first letter
+        msg = msg.charAt(0).toUpperCase() + msg.slice(1);
+      }
+      
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -140,12 +149,24 @@ export default function AdminPanel() {
       
       // Get Total User Count
       const coll = collection(db, 'users');
-      const countSnapshot = await getCountFromServer(coll);
+      let countSnapshot;
+      try {
+        countSnapshot = await getCountFromServer(coll);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.GET, 'users_count');
+        return;
+      }
       setTotalUsers(countSnapshot.data().count);
 
       // Get Top Users (for the list)
       const q = query(collection(db, 'users'), orderBy('totalCoins', 'desc'), limit(100));
-      const snap = await getDocs(q);
+      let snap;
+      try {
+        snap = await getDocs(q);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.LIST, 'users_top_100');
+        return;
+      }
       const allUsers = snap.docs.map(doc => doc.data() as UserData);
       setUsers(allUsers);
       
@@ -179,13 +200,20 @@ export default function AdminPanel() {
 
     setLoading(true);
     try {
-      // Search by Telegram ID (if numeric) or Username
+      // Search by Telegram ID (if numeric), Username, or Wallet Address
       let q;
       if (!isNaN(Number(searchTerm))) {
         q = query(collection(db, 'users'), where('telegramId', '==', Number(searchTerm)));
+      } else if (searchTerm.startsWith('0x') || searchTerm.length > 30) {
+        // Search by Wallet or UID
+        const walletSnap = await getDocs(query(collection(db, 'users'), where('walletAddress', '==', searchTerm)));
+        if (!walletSnap.empty) {
+          setUsers(walletSnap.docs.map(doc => doc.data() as UserData));
+          setLoading(false);
+          return;
+        }
+        q = query(collection(db, 'users'), where('uid', '==', searchTerm));
       } else {
-        // Simple username search (case sensitive and exact or prefix depends on implementation)
-        // For case-insensitive we'd need a normalized field, but telegramId is better for exact
         q = query(collection(db, 'users'), where('username', '==', searchTerm));
       }
       
@@ -201,8 +229,7 @@ export default function AdminPanel() {
         setUsers(foundUsers);
       }
     } catch (err: any) {
-      console.error("Search failed:", err);
-      setError(err.message || "Search failed");
+      handleFirestoreError(err, OperationType.LIST, `users_search_${searchTerm}`);
     } finally {
       setLoading(false);
     }
@@ -212,14 +239,14 @@ export default function AdminPanel() {
     if (!window.confirm("Are you sure you want to delete this user? This cannot be undone.")) return;
     
     try {
+      if (!db) throw new Error("DB not initialized");
       await deleteDoc(doc(db, 'users', userId));
       setUsers(prev => prev.filter(u => u.uid !== userId));
       setTotalUsers(prev => prev - 1);
       setSelectedUser(null);
       alert("User deleted successfully.");
     } catch (err) {
-      console.error("Delete failed:", err);
-      alert("Failed to delete user.");
+      handleFirestoreError(err, OperationType.DELETE, `users/${userId}`);
     }
   };
 
