@@ -12,7 +12,8 @@ import { LeaderboardEntry } from './types/game';
 import AdminPanel from './components/AdminPanel';
 
 export default function App() {
-  const { user, loading, syncing, tap, levelUp, setUser } = useGame();
+  const [activeTab, setActiveTab] = useState('home');
+  const { user, loading, syncing, tap, levelUp, setUser, myReferrals } = useGame(activeTab);
   
   const checkIsAdmin = () => {
     const url = window.location.href.toLowerCase();
@@ -48,8 +49,6 @@ export default function App() {
       window.removeEventListener('hashchange', handlePathChange);
     };
   }, []);
-
-  const [activeTab, setActiveTab] = useState('home');
 
   // Animated Coins State
   const coinsDisplay = useMotionValue(user?.coins || 0);
@@ -435,20 +434,22 @@ export default function App() {
   };
 
   const renderFriends = () => (
-    <div className="p-5 flex flex-col items-center justify-center gap-8 min-h-[70vh] text-center">
-      <div className="w-24 h-24 bg-card-bg rounded-[32px] flex items-center justify-center text-accent-gold mb-2 transform rotate-6 border-b-4 border-black/20 shadow-xl">
-        <Users size={48} />
-      </div>
-      <div>
-        <h2 className="text-3xl font-bold text-white italic tracking-tighter mb-2">Invite Squad</h2>
-        <p className="text-text-secondary text-sm max-w-[280px]">Grow your community and earn <span className="text-accent-gold font-bold">+5,000</span> per user!</p>
+    <div className="p-5 flex flex-col gap-6 pb-24 overflow-y-auto max-h-screen">
+      <div className="flex flex-col items-center text-center gap-4 mt-4">
+        <div className="w-20 h-20 bg-card-bg rounded-[28px] flex items-center justify-center text-accent-gold transform rotate-6 border-b-4 border-black/20 shadow-xl">
+          <Users size={32} />
+        </div>
+        <div>
+          <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">Invite Squad</h2>
+          <p className="text-text-secondary text-xs max-w-[280px]">Grow your community and earn rewards per user!</p>
+        </div>
       </div>
       
-      <div className="w-full max-w-[340px] bg-card-bg border border-white/5 p-6 rounded-3xl flex flex-col gap-4 shadow-2xl">
-        <div className="flex items-center gap-2 p-4 bg-black/40 rounded-2xl border border-dashed border-white/10 font-mono text-[11px] text-text-secondary overflow-hidden">
+      <div className="w-full bg-card-bg border border-white/5 p-5 rounded-3xl flex flex-col gap-4 shadow-xl">
+        <div className="flex items-center gap-2 p-3 bg-black/40 rounded-xl border border-dashed border-white/10 font-mono text-[10px] text-text-secondary overflow-hidden">
           <span className="truncate flex-1 text-left">{generateInviteLink()}</span>
           <button onClick={copyToClipboard} className="text-accent-gold hover:opacity-80 transition-opacity">
-            {copied ? <Check size={16} /> : <Copy size={16} />}
+            {copied ? <Check size={14} /> : <Copy size={14} />}
           </button>
         </div>
         <button 
@@ -460,15 +461,51 @@ export default function App() {
         </button>
       </div>
 
-      <div className="mt-4 text-left w-full">
-        <div className="flex justify-between items-center mb-4 px-2">
-          <h3 className="text-xs font-bold text-text-secondary uppercase tracking-widest">Active Friends</h3>
-          <span className="text-accent-gold font-bold text-sm">{user?.referralCount}</span>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-card-bg p-4 rounded-2xl border border-white/5 text-center">
+            <p className="text-[10px] text-text-secondary uppercase font-bold mb-1">Total Friends</p>
+            <p className="text-xl font-black text-white">{user?.referralCount || 0}</p>
         </div>
-        <div className="bg-card-bg rounded-2xl border border-white/5 p-5 text-text-secondary text-xs italic text-center">
-           {user && user.referralCount > 0 
-             ? `You have successfully invited ${user.referralCount} friends!` 
-             : "No referrals found. Invite friends to start earning!"}
+        <div className="bg-card-bg p-4 rounded-2xl border border-white/5 text-center">
+            <p className="text-[10px] text-text-secondary uppercase font-bold mb-1">Earned Bonus</p>
+            <p className="text-xl font-black text-accent-gold">{((user?.referralCount || 0) * 5000).toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="mt-2 flex flex-col gap-4">
+        <h3 className="text-xs font-black text-text-secondary uppercase tracking-widest ml-1">Your Referral Squad</h3>
+        <div className="bg-card-bg rounded-2xl border border-white/5 overflow-hidden shadow-xl flex flex-col">
+          <div className="p-3 bg-white/5 flex justify-between items-center text-[9px] uppercase font-bold text-text-secondary tracking-widest">
+            <span>User</span>
+            <span>Earnings</span>
+          </div>
+          <div className="flex flex-col">
+            {myReferrals && myReferrals.length > 0 ? (
+              myReferrals.map((ref, index) => (
+                <div key={index} className="p-3 flex items-center justify-between border-t border-white/5 hover:bg-white/[0.02] transition-colors">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-accent-gold/10 flex items-center justify-center text-accent-gold font-bold text-xs">
+                      {ref.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-white truncate max-w-[120px]">{ref.username}</p>
+                      <p className="text-[8px] text-accent-gold uppercase font-black">Lvl {ref.level}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="font-black text-xs text-white">
+                      {Math.floor(ref.coins).toLocaleString()}
+                    </span>
+                    <span className="text-[8px] text-text-secondary uppercase">Coins</span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="p-10 text-center text-text-secondary text-xs italic">
+                No friends found yet. Share your link!
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

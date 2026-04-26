@@ -37,7 +37,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if isSignedIn();
-      allow list: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow list: if isAdmin() || (isSignedIn() && (resource.data.uid == request.auth.uid || request.query.limit <= 100));
       
       allow create: if isSignedIn() && 
                       isOwner(userId) && 
@@ -72,6 +72,11 @@ service cloud.firestore {
       );
 
       allow delete: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
   }
 }

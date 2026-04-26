@@ -26,12 +26,27 @@
         "level": { "type": "number" }
       },
       "required": ["uid", "telegramId", "coins", "energy", "referralCode"]
+    },
+    "Settings": {
+      "title": "Global Settings",
+      "description": "Configurable parameters for game rewards and commissions",
+      "type": "object",
+      "properties": {
+        "referrerReward": { "type": "number" },
+        "refereeReward": { "type": "number" },
+        "passiveCommission": { "type": "number", "description": "Percentage 0-100" }
+      },
+      "required": ["referrerReward", "refereeReward"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
       "description": "Collection of game users"
+    },
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "Global config documents"
     }
   }
 }

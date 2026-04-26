@@ -4,8 +4,9 @@ import { collection, getDocs, query, orderBy, deleteDoc, doc, where, Timestamp, 
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from 'firebase/auth';
 import { UserData } from '../types/game';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, BarChart3, List, Trash2, X, Menu, Search, LogOut, ChevronRight, Calendar, Lock, Mail, Zap, Wallet } from 'lucide-react';
+import { Users, BarChart3, List, Trash2, X, Menu, Search, LogOut, ChevronRight, Calendar, Lock, Mail, Zap, Wallet, Settings } from 'lucide-react';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
+import { setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 
 export default function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -19,10 +20,16 @@ export default function AdminPanel() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'settings'>('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+
+  // Settings State
+  const [referrerReward, setReferrerReward] = useState(5000);
+  const [refereeReward, setRefereeReward] = useState(2500);
+  const [passiveCommission, setPassiveCommission] = useState(10);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const ADMIN_EMAILS = ["md.khotiborrahman@gmail.com"];
   const ADMIN_UIDS = ["exJ8T8grBxVQPmIdQXJu5259dFl2"];
@@ -81,6 +88,25 @@ export default function AdminPanel() {
     return () => unsubscribe();
   }, []);
 
+  const saveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      if (!db) throw new Error("DB not initialized");
+      await setDoc(doc(db, 'settings', 'global'), {
+        referrerReward,
+        refereeReward,
+        passiveCommission,
+        updatedAt: serverTimestamp(),
+        updatedBy: adminUser?.email || 'Admin'
+      }, { merge: true });
+      alert("Settings saved successfully!");
+    } catch (err: any) {
+      console.error("Failed to save settings:", err);
+      alert("Failed to save: " + (err.message || "Unknown error"));
+    } finally {
+      setSavingSettings(false);
+    }
+  };
   const formatNumber = (num: number) => {
     if (num >= 1000000000) return (num / 1000000000).toFixed(2) + 'B';
     if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
@@ -147,7 +173,14 @@ export default function AdminPanel() {
     try {
       if (!db) throw new Error("Database not initialized");
       
-      // Get Total User Count
+      // Fetch Settings
+      const settingsSnap = await getDoc(doc(db, 'settings', 'global'));
+      if (settingsSnap.exists()) {
+        const data = settingsSnap.data();
+        setReferrerReward(data.referrerReward || 5000);
+        setRefereeReward(data.refereeReward || 2500);
+        setPassiveCommission(data.passiveCommission || 10);
+      }
       const coll = collection(db, 'users');
       let countSnapshot;
       try {
@@ -370,6 +403,12 @@ export default function AdminPanel() {
               >
                 <List size={20} /> User List
               </button>
+              <button 
+                onClick={() => { setActiveTab('settings'); setSidebarOpen(false); }}
+                className={`flex items-center gap-3 p-4 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-accent-gold text-black font-bold' : 'text-text-secondary hover:bg-white/5'}`}
+              >
+                <Settings size={20} /> App Settings
+              </button>
             </nav>
 
             <div className="mt-auto pt-6 border-t border-white/10 flex flex-col gap-4">
@@ -469,6 +508,77 @@ export default function AdminPanel() {
                   <BarChart3 size={60} className="text-white/10" />
                   <p className="text-text-secondary text-sm italic">User growth tracking is automatically generated based on registration logs.</p>
                </div>
+            </div>
+          </div>
+        ) : activeTab === 'settings' ? (
+          <div className="flex flex-col gap-8 max-w-4xl">
+            <header>
+              <h1 className="text-3xl font-black italic uppercase tracking-tighter">Global Settings</h1>
+              <p className="text-text-secondary italic">Configure rewards and platform parameters</p>
+            </header>
+
+            <div className="grid gap-6">
+              <div className="bg-card-bg p-8 rounded-3xl border border-white/10 shadow-xl flex flex-col gap-6">
+                <div className="flex items-center gap-3 text-accent-gold mb-2">
+                  <Users size={20} />
+                  <h3 className="font-black uppercase tracking-widest text-sm">Referral Rewards</h3>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Referrer Reward (Coins)</label>
+                    <input 
+                      type="number" 
+                      value={referrerReward}
+                      onChange={(e) => setReferrerReward(Number(e.target.value))}
+                      className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold"
+                    />
+                    <p className="text-[10px] text-text-secondary italic ml-1">Bonus given to the person who invited the friend.</p>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Referee Reward (New User Coins)</label>
+                    <input 
+                      type="number" 
+                      value={refereeReward}
+                      onChange={(e) => setRefereeReward(Number(e.target.value))}
+                      className="bg-card-bg border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold"
+                    />
+                    <p className="text-[10px] text-text-secondary italic ml-1">Welcome bonus for the new user arriving via link.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-card-bg p-8 rounded-3xl border border-white/10 shadow-xl flex flex-col gap-6">
+                <div className="flex items-center gap-3 text-blue-400 mb-2">
+                  <Zap size={20} />
+                  <h3 className="font-black uppercase tracking-widest text-sm">Commission System</h3>
+                </div>
+                
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Passive Income Commission (%)</label>
+                  <div className="flex items-center gap-4">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="100" 
+                      value={passiveCommission}
+                      onChange={(e) => setPassiveCommission(Number(e.target.value))}
+                      className="flex-1 accent-accent-gold"
+                    />
+                    <span className="w-16 text-center font-bold text-xl">{passiveCommission}%</span>
+                  </div>
+                  <p className="text-[10px] text-text-secondary italic ml-1">Percentage of passive income collected by users that is awarded as a bonus to their referrer.</p>
+                </div>
+              </div>
+
+              <button 
+                onClick={saveSettings}
+                disabled={savingSettings}
+                className="bg-accent-gold text-black py-4 rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl shadow-accent-gold/20 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {savingSettings ? <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" /> : <Check size={18} />}
+                Save Configuration
+              </button>
             </div>
           </div>
         ) : (

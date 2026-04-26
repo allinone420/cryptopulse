@@ -2,17 +2,19 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import WebApp from '@twa-dev/sdk';
 import { auth, db } from '../lib/firebase';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, increment, getDocFromServer } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, getDocFromServer, query, collection, orderBy, limit, getDocs, where } from 'firebase/firestore';
 import { initTelegram, hapticFeedback } from '../lib/telegram';
 import { UserData } from '../types/game';
 import { INITIAL_ENERGY, ENERGY_REFILL_RATE, LEVELS, REFERRAL_REWARD_REFERRER, REFERRAL_REWARD_REFEREE } from '../lib/constants';
 import { useTonAddress, useTonWallet } from '@tonconnect/ui-react';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 
-export const useGame = () => {
+export const useGame = (activeTab?: string) => {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [settings, setSettings] = useState<any>(null);
+  const [myReferrals, setMyReferrals] = useState<any[]>([]);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const wallet = useTonWallet();
   const address = useTonAddress();
@@ -50,6 +52,36 @@ export const useGame = () => {
 
   // Auth & Initial Data Fetch
   useEffect(() => {
+    const fetchGlobalSettings = async () => {
+      try {
+        const settingsSnap = await getDoc(doc(db, 'settings', 'global'));
+        if (settingsSnap.exists()) {
+          setSettings(settingsSnap.data());
+        } else {
+          setSettings({
+            referrerReward: REFERRAL_REWARD_REFERRER,
+            refereeReward: REFERRAL_REWARD_REFEREE,
+            passiveCommission: 10
+          });
+        }
+      } catch (err: any) {
+        // Handle "offline" error gracefully as per Firebase guidelines
+        if (err.message?.includes('offline')) {
+          console.warn("Settings fetch deferred: Client is offline. Using defaults.");
+        } else {
+          console.error("Failed to fetch settings:", err);
+        }
+        // Always set defaults so the game doesn't break
+        setSettings({
+          referrerReward: REFERRAL_REWARD_REFERRER,
+          refereeReward: REFERRAL_REWARD_REFEREE,
+          passiveCommission: 10
+        });
+      }
+    };
+
+    fetchGlobalSettings();
+
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       try {
         const tgUser = WebApp?.initDataUnsafe?.user;
@@ -69,8 +101,7 @@ export const useGame = () => {
           if (userSnap.exists()) {
             const data = userSnap.data() as UserData;
             
-            // SECURITY CHECK: If this account belongs to a different Telegram ID,
-            // we should not allow access. This prevents session crosstalk when sharing links.
+            // SECURITY CHECK
             if (currentTgId && data.telegramId && data.telegramId !== currentTgId) {
               console.warn('Session conflict detected! Signing out...');
               await auth.signOut();
@@ -79,12 +110,17 @@ export const useGame = () => {
             
             setUser(data);
           } else {
+            // Wait for settings to load if possible, or use defaults
+            const currentSettings = settings || {
+              referrerReward: REFERRAL_REWARD_REFERRER,
+              refereeReward: REFERRAL_REWARD_REFEREE
+            };
+
             // New User flow (Registration)
             const startParam = WebApp?.initDataUnsafe?.start_param;
             let referrerUid = null;
             if (startParam && startParam.startsWith('ref_')) {
               const potentialReferrerId = startParam.replace('ref_', '');
-              // Prevent self-referral
               if (potentialReferrerId !== fbUser.uid) {
                 referrerUid = potentialReferrerId;
               }
@@ -95,8 +131,8 @@ export const useGame = () => {
               telegramId: currentTgId || 0,
               username: tgUser?.username || tgUser?.first_name || 'Player',
               firstName: tgUser?.first_name || 'Player',
-              coins: referrerUid ? REFERRAL_REWARD_REFEREE : 0,
-              totalCoins: referrerUid ? REFERRAL_REWARD_REFEREE : 0,
+              coins: referrerUid ? currentSettings.refereeReward : 0,
+              totalCoins: referrerUid ? currentSettings.refereeReward : 0,
               energy: INITIAL_ENERGY,
               maxEnergy: LEVELS[0].maxEnergy,
               lastEnergyUpdate: Date.now(),
@@ -124,11 +160,10 @@ export const useGame = () => {
                 const referrerRef = doc(db, 'users', referrerUid);
                 await updateDoc(referrerRef, {
                   referralCount: increment(1),
-                  coins: increment(REFERRAL_REWARD_REFERRER),
-                  totalCoins: increment(REFERRAL_REWARD_REFERRER)
+                  coins: increment(currentSettings.referrerReward),
+                  totalCoins: increment(currentSettings.referrerReward)
                 });
               } catch (err) {
-                // Referral reward might fail if the referrer UID is invalid
                 console.error('Failed to reward referrer:', err);
               }
             }
@@ -154,9 +189,7 @@ export const useGame = () => {
     });
 
     return () => unsub();
-  }, [WebApp?.initDataUnsafe?.user?.id]);
-
-  // Energy Refill & Passive Income Ticker
+  }, [WebApp?.initDataUnsafe?.user?.id, settings]);
   useEffect(() => {
     if (!user) return;
 
@@ -229,17 +262,42 @@ export const useGame = () => {
       setSyncing(true);
       try {
         const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-          coins: Math.floor(user.coins),
-          totalCoins: Math.floor(user.totalCoins),
-          energy: Math.floor(user.energy),
-          level: user.level,
-          lastEnergyUpdate: user.lastEnergyUpdate,
-          lastPassiveIncomeUpdate: user.lastPassiveIncomeUpdate,
-          lastDailyReward: user.lastDailyReward,
-          dailyStreak: user.dailyStreak,
-          lastActive: Date.now()
-        });
+        
+        // Calculate income since last sync for commission logic
+        // This is a simplified version: we estimate based on passiveRate and time
+        // Actual robust implementation would need server-side functions, but we'll do it via client-write for now.
+        const rewardReferrer = async () => {
+          if (user.referredBy && settings?.passiveCommission > 0) {
+            const now = Date.now();
+            const lastUpdate = user.lastPassiveIncomeUpdate || now;
+            const seconds = Math.floor((now - lastUpdate) / 1000);
+            if (seconds > 0) {
+              const commission = (user.passiveIncomeRate * seconds) * (settings.passiveCommission / 100);
+              if (commission > 0.1) {
+                const referrerRef = doc(db, 'users', user.referredBy);
+                await updateDoc(referrerRef, {
+                  coins: increment(commission),
+                  totalCoins: increment(commission)
+                });
+              }
+            }
+          }
+        };
+
+        await Promise.all([
+          updateDoc(userRef, {
+            coins: Math.floor(user.coins),
+            totalCoins: Math.floor(user.totalCoins),
+            energy: Math.floor(user.energy),
+            level: user.level,
+            lastEnergyUpdate: user.lastEnergyUpdate,
+            lastPassiveIncomeUpdate: user.lastPassiveIncomeUpdate,
+            lastDailyReward: user.lastDailyReward,
+            dailyStreak: user.dailyStreak,
+            lastActive: Date.now()
+          }),
+          rewardReferrer()
+        ]);
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
       } finally {
@@ -306,5 +364,30 @@ export const useGame = () => {
     }
   }, [user]);
 
-  return { user, loading, syncing, tap, levelUp, setUser };
+  useEffect(() => {
+    if (activeTab === 'friends' && user?.uid) {
+      const fetchMyReferrals = async () => {
+        try {
+          const q = query(
+            collection(db, 'users'), 
+            where('referredBy', '==', user.uid),
+            orderBy('coins', 'desc'), 
+            limit(20)
+          );
+          const snapshot = await getDocs(q);
+          const list = snapshot.docs.map(doc => ({
+            username: doc.data().username || 'Anonymous',
+            coins: doc.data().coins || 0,
+            level: doc.data().level || 1
+          }));
+          setMyReferrals(list);
+        } catch (err) {
+          console.error("Referrals fetch error:", err);
+        }
+      };
+      fetchMyReferrals();
+    }
+  }, [activeTab, user?.uid]);
+
+  return { user, loading, syncing, tap, levelUp, setUser, settings, myReferrals };
 };
