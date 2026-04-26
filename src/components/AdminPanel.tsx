@@ -204,8 +204,9 @@ export default function AdminPanel() {
       let q;
       if (!isNaN(Number(searchTerm))) {
         q = query(collection(db, 'users'), where('telegramId', '==', Number(searchTerm)));
-      } else if (searchTerm.startsWith('0x') || searchTerm.length > 30) {
+      } else if (searchTerm.startsWith('0x') || searchTerm.startsWith('EQ') || searchTerm.length > 25) {
         // Search by Wallet or UID
+        // Try walletAddress first
         const walletSnap = await getDocs(query(collection(db, 'users'), where('walletAddress', '==', searchTerm)));
         if (!walletSnap.empty) {
           setUsers(walletSnap.docs.map(doc => doc.data() as UserData));

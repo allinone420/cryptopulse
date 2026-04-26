@@ -6,7 +6,7 @@ import { doc, getDoc, setDoc, updateDoc, increment, getDocFromServer } from 'fir
 import { initTelegram, hapticFeedback } from '../lib/telegram';
 import { UserData } from '../types/game';
 import { INITIAL_ENERGY, ENERGY_REFILL_RATE, LEVELS, REFERRAL_REWARD_REFERRER, REFERRAL_REWARD_REFEREE } from '../lib/constants';
-import { useWeb3ModalAccount } from '@web3modal/ethers5/react';
+import { useTonAddress, useTonWallet } from '@tonconnect/ui-react';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 
 export const useGame = () => {
@@ -14,7 +14,9 @@ export const useGame = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const { address, isConnected } = useWeb3ModalAccount();
+  const wallet = useTonWallet();
+  const address = useTonAddress();
+  const isConnected = !!wallet;
 
   // Initialize Telegram
   useEffect(() => {
@@ -198,19 +200,24 @@ export const useGame = () => {
 
   // Sync Wallet to User Doc
   useEffect(() => {
-    if (user && isConnected && address && user.walletAddress !== address) {
-      const updateWallet = async () => {
+    const syncWallet = async () => {
+      if (user && isConnected && address && user.walletAddress !== address) {
+        console.log('Syncing wallet address to Firestore:', address);
         try {
+          // Update local state first for immediate feedback
           setUser(prev => prev ? ({ ...prev, walletAddress: address }) : null);
+          
           const userRef = doc(db, 'users', user.uid);
           await updateDoc(userRef, { walletAddress: address });
+          console.log('Wallet address synced successfully');
         } catch (err) {
+          console.error('Failed to sync wallet address:', err);
           handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
         }
-      };
-      updateWallet();
-    }
-  }, [isConnected, address, user?.uid]);
+      }
+    };
+    syncWallet();
+  }, [isConnected, address, user?.uid, user?.walletAddress]);
 
   // Sync to Firestore (Debounced)
   useEffect(() => {
