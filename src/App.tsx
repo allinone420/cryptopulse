@@ -56,7 +56,16 @@ export default function App() {
 
   useEffect(() => {
     if (user?.coins !== undefined) {
-      animate(coinsDisplay, user.coins, { duration: 0.5, ease: "easeOut" });
+      const currentVal = coinsDisplay.get();
+      const diff = user.coins - currentVal;
+      
+      // If jump is huge (like returning from background), snap immediately
+      if (Math.abs(diff) > 5000) {
+        coinsDisplay.set(user.coins);
+      } else if (Math.abs(diff) > 0.1) {
+        // Only animate if there's a tangible change to avoid jitter
+        animate(coinsDisplay, user.coins, { duration: 0.5, ease: "easeOut" });
+      }
     }
   }, [user?.coins]);
 
@@ -265,9 +274,10 @@ export default function App() {
   };
 
   const handleTap = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!user || user.energy < 1) return;
+    if (!user) return;
     
-    tap();
+    const success = tap();
+    if (!success) return;
 
     const clientX = 'touches' in e ? (e as React.TouchEvent).touches[0].clientX : (e as React.MouseEvent).clientX;
     const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0].clientY : (e as React.MouseEvent).clientY;

@@ -108,6 +108,24 @@ export const useGame = (activeTab?: string) => {
               return; 
             }
             
+            // Calculate Offline Income
+            const now = Date.now();
+            const lastUpdate = data.lastPassiveIncomeUpdate || data.lastActive || now;
+            const secondsPassed = Math.floor((now - lastUpdate) / 1000);
+            
+            if (secondsPassed > 1) {
+              const currentLevel = LEVELS.find(l => l.level === data.level) || LEVELS[0];
+              const offlineIncome = currentLevel.passiveRate * secondsPassed;
+              data.coins += offlineIncome;
+              data.totalCoins += offlineIncome;
+              data.lastPassiveIncomeUpdate = now;
+              
+              // Also refill energy
+              const energyRefill = ENERGY_REFILL_RATE * secondsPassed;
+              data.energy = Math.min(data.maxEnergy, data.energy + energyRefill);
+              data.lastEnergyUpdate = now;
+            }
+            
             setUser(data);
           } else {
             // Wait for settings to load if possible, or use defaults
@@ -189,7 +207,7 @@ export const useGame = (activeTab?: string) => {
     });
 
     return () => unsub();
-  }, [WebApp?.initDataUnsafe?.user?.id, settings]);
+  }, [WebApp?.initDataUnsafe?.user?.id]);
   useEffect(() => {
     if (!user) return;
 
@@ -198,21 +216,34 @@ export const useGame = (activeTab?: string) => {
         if (!prev) return null;
         
         const now = Date.now();
-        const secondsPassed = Math.floor((now - prev.lastEnergyUpdate) / 1000);
         
+        // Guard against clock going backwards (e.g. system time sync)
+        if (now < prev.lastPassiveIncomeUpdate || now < prev.lastEnergyUpdate) {
+            return {
+                ...prev,
+                lastEnergyUpdate: now,
+                lastPassiveIncomeUpdate: now
+            };
+        }
+
+        const energySeconds = Math.max(0, Math.floor((now - prev.lastEnergyUpdate) / 1000));
+        const passiveSeconds = Math.max(0, Math.floor((now - prev.lastPassiveIncomeUpdate) / 1000));
+        
+        // Skip update if no time passed
+        if (energySeconds < 1 && passiveSeconds < 1) return prev;
+
         // Energy refill
         let newEnergy = prev.energy;
-        if (secondsPassed >= 1 && prev.energy < prev.maxEnergy) {
-          newEnergy = Math.min(prev.maxEnergy, prev.energy + (ENERGY_REFILL_RATE * secondsPassed));
+        if (energySeconds >= 1 && prev.energy < prev.maxEnergy) {
+          newEnergy = Math.min(prev.maxEnergy, prev.energy + (ENERGY_REFILL_RATE * energySeconds));
         }
 
         // Passive income
-        const passiveSeconds = Math.floor((now - prev.lastPassiveIncomeUpdate) / 1000);
         let newCoins = prev.coins;
         let newTotal = prev.totalCoins;
         if (passiveSeconds >= 1) {
-          const currentLevel = LEVELS.find(l => l.level === prev.level) || LEVELS[0];
-          const income = currentLevel.passiveRate * passiveSeconds;
+          const currentLevelInfo = LEVELS.find(l => l.level === prev.level) || LEVELS[0];
+          const income = currentLevelInfo.passiveRate * passiveSeconds;
           newCoins += income;
           newTotal += income;
         }
@@ -286,9 +317,9 @@ export const useGame = (activeTab?: string) => {
 
         await Promise.all([
           updateDoc(userRef, {
-            coins: Math.floor(user.coins),
-            totalCoins: Math.floor(user.totalCoins),
-            energy: Math.floor(user.energy),
+            coins: user.coins,
+            totalCoins: user.totalCoins,
+            energy: user.energy,
             level: user.level,
             lastEnergyUpdate: user.lastEnergyUpdate,
             lastPassiveIncomeUpdate: user.lastPassiveIncomeUpdate,
@@ -311,15 +342,14 @@ export const useGame = (activeTab?: string) => {
   }, [user?.coins, user?.energy]);
 
   const tap = useCallback(() => {
-    if (!user || user.energy < 1) return;
-
-    hapticFeedback();
-    
-    const currentLevel = LEVELS.find(l => l.level === user.level) || LEVELS[0];
-    const tapVal = currentLevel.tapValue;
-
+    let success = false;
     setUser((prev) => {
-      if (!prev || prev.energy < 1) return prev;
+      if (!prev || Math.floor(prev.energy) < 1) return prev;
+      
+      const currentLevel = LEVELS.find(l => l.level === prev.level) || LEVELS[0];
+      const tapVal = currentLevel.tapValue;
+      
+      success = true;
       return {
         ...prev,
         coins: prev.coins + tapVal,
@@ -327,7 +357,12 @@ export const useGame = (activeTab?: string) => {
         energy: prev.energy - 1
       };
     });
-  }, [user?.energy, user?.level]);
+
+    if (success) {
+      hapticFeedback();
+    }
+    return success;
+  }, [user?.level]);
 
   const levelUp = useCallback(async () => {
     if (!user) return;
