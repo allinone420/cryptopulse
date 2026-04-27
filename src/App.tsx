@@ -14,6 +14,10 @@ import AdminPanel from './components/AdminPanel';
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const { user, loading, syncing, tap, levelUp, setUser, myReferrals } = useGame(activeTab);
+
+  useEffect(() => {
+    // Other initializations can go here
+  }, []);
   
   const checkIsAdmin = () => {
     const url = window.location.href.toLowerCase();
@@ -27,7 +31,7 @@ export default function App() {
   };
 
   const [isAdminPath, setIsAdminPath] = useState(checkIsAdmin());
-  const [taps, setTaps] = useState<{ id: number; x: number; y: number }[]>([]);
+  const [taps, setTaps] = useState<{ id: number; x: number; y: number; value: number }[]>([]);
   const [showDaily, setShowDaily] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
   const [adCooldown, setAdCooldown] = useState(0);
@@ -170,19 +174,6 @@ export default function App() {
     checkDaily();
   }, [user?.uid, loading]);
 
-  if (isAdminPath) {
-    return <AdminPanel />;
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0a0b0d] flex flex-col items-center justify-center gap-4">
-        <div className="w-16 h-16 border-4 border-[#f3ba2f] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[#f3ba2f] font-bold uppercase tracking-widest text-xs">SatoCryp Initializing...</p>
-      </div>
-    );
-  }
-
   const claimDaily = () => {
     if (!user) return;
     
@@ -240,23 +231,27 @@ export default function App() {
     WebApp.HapticFeedback.notificationOccurred('success');
   };
 
+
   const watchAd = (taskId: string) => {
     if (adCooldown > 0) return;
+    if (typeof (window as any).show_10932949 !== 'function') {
+      alert("Ads SDK is loading, please try again in a moment.");
+      return;
+    }
     
-    // Simulate Ad Watch
-    setAdCooldown(30); // 30s cooldown
-    const timer = setInterval(() => {
-      setAdCooldown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
     const task = TASKS.find(t => t.id === taskId);
-    if (task) {
+    if (!task) return;
+
+    // Safety timeout for ad call to prevent "adex timeout" hanging
+    const adPromise = taskId === 'ad_popup' ? (window as any).show_10932949('pop') : (window as any).show_10932949();
+    
+    // Create a timeout promise - increased to 60s for better tolerance
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Ad load timeout')), 60000)
+    );
+
+    Promise.race([adPromise, timeoutPromise]).then(() => {
+      // Reward user
       setUser(prev => prev ? ({
         ...prev,
         coins: prev.coins + task.reward,
@@ -268,21 +263,44 @@ export default function App() {
         particleCount: 100,
         spread: 50,
         origin: { y: 0.7 },
-        colors: ['#f3ba2f']
+        colors: ['#f3ba2f', '#ffffff']
       });
-    }
+
+      WebApp.HapticFeedback.notificationOccurred('success');
+      
+      // Still set a small cooldown to prevent spamming
+      setAdCooldown(10);
+      const adTimer = setInterval(() => {
+        setAdCooldown(prev => {
+          if (prev <= 1) {
+            clearInterval(adTimer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }).catch((e: any) => {
+      console.error('Ad Error:', e);
+      WebApp.HapticFeedback.notificationOccurred('error');
+    });
   };
 
-  const handleTap = (e: React.MouseEvent | React.TouchEvent) => {
+  const handleTap = (e: React.PointerEvent) => {
     if (!user) return;
     
+    // Prevent default to avoid virtual mouse events on some devices
+    if (e.cancelable) e.preventDefault();
+
     const success = tap();
     if (!success) return;
 
-    const clientX = 'touches' in e ? (e as React.TouchEvent).touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0].clientY : (e as React.MouseEvent).clientY;
+    // Get exact coordinates from pointer event
+    const clientX = e.clientX;
+    const clientY = e.clientY;
 
-    const newTap = { id: Date.now(), x: clientX, y: clientY };
+    const currentLevel = LEVELS.find(l => l.level === user.level) || LEVELS[0];
+
+    const newTap = { id: Math.random() + performance.now(), x: clientX, y: clientY, value: currentLevel.tapValue };
     setTaps((prev) => [...prev, newTap]);
     setTimeout(() => {
       setTaps((prev) => prev.filter((t) => t.id !== newTap.id));
@@ -313,7 +331,7 @@ export default function App() {
         <div className="text-center mb-8">
           <div className="text-sm text-text-secondary uppercase tracking-widest mb-1.5 font-medium">Total Balance</div>
           <h1 className="text-[42px] font-bold flex items-center justify-center gap-2.5 leading-none">
-            <div className="w-10 h-10 bg-accent-gold rounded-full coin-icon-shadow border-2 border-white/10" />
+            <div className="w-10 h-10 bg-accent-gold rounded-full coin-icon-shadow border-2 border-white/20 flex items-center justify-center text-black/60 text-xl font-black shadow-[inset_0_2px_4px_rgba(255,255,255,0.4),0_0_15px_rgba(243,186,47,0.3)]">S</div>
             <motion.span>{roundedCoins}</motion.span>
           </h1>
         </div>
@@ -321,9 +339,8 @@ export default function App() {
         <div className="relative" ref={tapContainerRef}>
           <motion.button
             whileTap={{ scale: 0.96 }}
-            onClick={handleTap}
-            onTouchStart={handleTap}
-            className="w-[240px] h-[240px] bg-radial-[circle_at_center,_var(--color-bg-main)_0%,_#1c212b_100%] rounded-full flex items-center justify-center border-[12px] border-[#252b36] tap-button-shadow group relative overflow-hidden"
+            onPointerDown={handleTap}
+            className="w-[240px] h-[240px] bg-radial-[circle_at_center,_var(--color-bg-main)_0%,_#1c212b_100%] rounded-full flex items-center justify-center border-[12px] border-accent-gold shadow-[0_0_40px_rgba(243,186,47,0.1)] tap-button-shadow group relative overflow-hidden"
           >
             <div className="absolute inset-0 bg-accent-gold/5 group-active:opacity-20 transition-opacity" />
             <div className="w-[160px] h-[160px] bg-[#363d4a] rounded-[40px] rotate-45 flex items-center justify-center overflow-hidden">
@@ -346,28 +363,17 @@ export default function App() {
             {taps.map((t) => (
               <motion.div
                 key={t.id}
-                initial={{ opacity: 1, y: t.y - 150, x: t.x - 20 }}
-                animate={{ opacity: 0, y: t.y - 250 }}
+                initial={{ opacity: 1, y: 0 }}
+                animate={{ opacity: 0, y: -100 }}
                 exit={{ opacity: 0 }}
-                className="fixed pointer-events-none text-white font-black text-3xl z-50 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-                style={{ left: t.x, top: t.y }}
+                className="fixed pointer-events-none text-white font-black text-3xl z-50 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] select-none"
+                style={{ left: t.x - 20, top: t.y - 40 }}
               >
-                +{COINS_PER_TAP}
+                +{t.value}
               </motion.div>
             ))}
           </AnimatePresence>
         </div>
-      </div>
-
-      {/* Activity Feed */}
-      <div className="bg-black/10 mx-5 py-2 px-3 rounded-xl text-[11px] text-text-secondary flex justify-center gap-2 font-medium">
-        <span className="text-accent-blue font-bold">Live:</span>
-        <motion.div
-           animate={{ opacity: [0.6, 1, 0.6] }}
-           transition={{ duration: 2, repeat: Infinity }}
-        >
-          User @cryptoking earned 500 coins • 2s ago
-        </motion.div>
       </div>
 
       {/* Energy Section */}
@@ -502,11 +508,11 @@ export default function App() {
                       <p className="text-[8px] text-accent-gold uppercase font-black">Lvl {ref.level}</p>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end">
-                    <span className="font-black text-xs text-white">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-xs text-white">
                       {Math.floor(ref.coins).toLocaleString()}
                     </span>
-                    <span className="text-[8px] text-text-secondary uppercase">Coins</span>
+                    <Coins size={10} className="text-accent-gold" />
                   </div>
                 </div>
               ))
@@ -520,6 +526,19 @@ export default function App() {
       </div>
     </div>
   );
+
+  if (isAdminPath) {
+    return <AdminPanel />;
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0a0b0d] flex flex-col items-center justify-center gap-4">
+        <div className="w-16 h-16 border-4 border-[#f3ba2f] border-t-transparent rounded-full animate-spin" />
+        <p className="text-[#f3ba2f] font-bold uppercase tracking-widest text-xs">SatoCryp Initializing...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-bg-main text-text-primary font-sans selection:bg-accent-gold/30">
@@ -644,15 +663,14 @@ export default function App() {
         {showLevelUp && (
           <div 
             onClick={() => setShowLevelUp(false)}
-            className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-md px-4 pb-10 sm:p-6"
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4"
           >
             <motion.div
               onClick={(e) => e.stopPropagation()}
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="bg-card-bg w-full max-w-sm rounded-[32px] border border-white/10 p-8 flex flex-col gap-6 shadow-2xl relative"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-card-bg w-full max-w-sm rounded-[32px] border border-white/10 p-6 flex flex-col gap-5 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
               <button 
                 onClick={() => setShowLevelUp(false)}
@@ -736,17 +754,6 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
-
-      {/* Fake Activity Feed */}
-      <div className="fixed bottom-24 left-4 right-4 z-30 pointer-events-none overflow-hidden h-6 bg-black/5 rounded-lg flex items-center justify-center">
-        <motion.div
-          animate={{ x: [-200, 400] }}
-          transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
-          className="whitespace-nowrap italic text-[10px] text-text-secondary font-bold uppercase tracking-widest"
-        >
-          User @cryptoking earned 500 coins • @MegaHamster reached Level 4 • @TapperPros connected wallet •
-        </motion.div>
-      </div>
     </div>
   );
 }

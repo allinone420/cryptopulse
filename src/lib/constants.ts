@@ -5,7 +5,8 @@ export const COINS_PER_TAP = 1;
 
 export const TASKS = [
   { id: 'tg_join', title: 'Join our Telegram Channel', reward: 500, type: 'telegram', link: 'https://t.me/example' },
-  { id: 'watch_ad_1', title: 'Watch Ad - Earn 100 Coins', reward: 100, type: 'ads' },
+  { id: 'ad_interstitial', title: 'Watch Ad Interstitial', reward: 500, type: 'ads' },
+  { id: 'ad_popup', title: 'Watch Reward Popup Ad', reward: 1000, type: 'ads' },
   { id: 'invite_3', title: 'Invite 3 Friends', reward: 2000, type: 'invite' },
 ];
 

@@ -4,7 +4,7 @@ export const initTelegram = () => {
   try {
     WebApp.ready();
     WebApp.expand();
-    
+
     // Hamster Kombat style seamless header
     // Use 'bg_color' or specific hex to remove the blue/gray bar
     if ((WebApp as any).setHeaderColor) {

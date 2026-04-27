@@ -31,7 +31,6 @@ export const Navigation = ({ active, setActive }: TabProps) => {
             <tab.icon size={18} />
           </div>
           <span className="text-[10px] font-medium tracking-wider uppercase">{tab.label}</span>
-          {tab.id === 'friends' && <div className="absolute top-0 right-[-10px] bg-[#eb5757] text-white text-[8px] px-1.5 py-0.5 rounded-sm">+2</div>}
         </button>
       ))}
     </nav>

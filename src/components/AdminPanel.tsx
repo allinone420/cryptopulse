@@ -307,7 +307,7 @@ export default function AdminPanel() {
       case 'dashboard':
         return (
           <div className="flex flex-col gap-8">
-            <header className="flex justify-between items-end">
+            <header className="sticky top-0 z-[30] bg-[#0a0b0d] pt-6 pb-6 md:pt-10 flex justify-between items-end">
               <div>
                 <h1 className="text-3xl font-black italic uppercase tracking-tighter">Dashboard</h1>
                 <p className="text-text-secondary italic">Real-time platform overview</p>
@@ -370,7 +370,7 @@ export default function AdminPanel() {
       case 'settings':
         return (
           <div className="flex flex-col gap-8 max-w-4xl">
-            <header>
+            <header className="sticky top-0 z-[30] bg-[#0a0b0d] pt-6 pb-6 md:pt-10">
               <h1 className="text-3xl font-black italic uppercase tracking-tighter">Global Settings</h1>
               <p className="text-text-secondary italic">Configure rewards and platform parameters</p>
             </header>
@@ -444,7 +444,7 @@ export default function AdminPanel() {
       default:
         return (
           <div className="flex flex-col gap-6">
-            <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <header className="sticky top-0 z-[30] bg-[#0a0b0d] pt-6 pb-6 md:pt-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-black italic uppercase tracking-tighter">User Management</h1>
                 <p className="text-text-secondary italic">Manage and monitor all participants</p>
@@ -602,7 +602,7 @@ export default function AdminPanel() {
   return (
     <div className="min-h-screen bg-[#0a0b0d] flex flex-col md:flex-row text-white font-sans">
       {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 bg-card-bg border-b border-white/10">
+      <div className="md:hidden sticky top-0 z-[40] flex items-center justify-between p-4 bg-card-bg border-b border-white/10">
         <div className="flex items-center gap-2">
            <BarChart3 className="text-accent-gold" />
            <span className="font-black uppercase tracking-tighter">Admin Panel</span>
@@ -674,7 +674,7 @@ export default function AdminPanel() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 p-6 md:p-10 overflow-y-auto max-h-screen">
+      <main className="flex-1 px-6 pb-6 md:px-10 md:pb-10 overflow-y-auto max-h-screen">
         {error && (
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl flex flex-col gap-2">
             <div className="flex items-center justify-between">
