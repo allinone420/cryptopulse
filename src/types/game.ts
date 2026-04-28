@@ -37,6 +37,7 @@ export interface UserData {
   adCompletions?: { [adId: string]: number }; // timestamp of last view per ad
   dailyStreak: number;
   level: number;
+  mineCards?: { [cardId: string]: number }; // cardId -> level
   lastActive?: number;
 }
 
@@ -50,6 +51,7 @@ export interface Task {
 }
 
 export interface LeaderboardEntry {
+  uid: string;
   username: string;
   coins: number;
   level: number;

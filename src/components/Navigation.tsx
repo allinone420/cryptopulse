@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Coins, Zap, Trophy, Users, CheckCircle2, Wallet, RefreshCw, Settings } from 'lucide-react';
+import { Coins, Zap, Trophy, Users, CheckCircle2, Wallet, RefreshCw, Settings, Pickaxe } from 'lucide-react';
 import { TonConnectButton } from '@tonconnect/ui-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LEVELS } from '../lib/constants';
@@ -12,13 +12,14 @@ interface TabProps {
 export const Navigation = ({ active, setActive }: TabProps) => {
   const tabs = [
     { id: 'home', icon: Coins, label: 'Exchange' },
+    { id: 'mine', icon: Pickaxe, label: 'Mine' },
     { id: 'tasks', icon: CheckCircle2, label: 'Earn' },
     { id: 'friends', icon: Users, label: 'Friends' },
     { id: 'leaders', icon: Trophy, label: 'Leaders' },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-card-bg border-t border-white/5 px-4 pb-8 pt-4 flex justify-between items-center z-50">
+    <nav className="fixed bottom-0 left-0 right-0 bg-card-bg border-t border-white/5 px-2 pb-8 pt-4 flex justify-between items-center z-50 overflow-x-auto">
       {tabs.map((tab) => (
         <button
           key={tab.id}

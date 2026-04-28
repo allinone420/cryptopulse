@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, animate } from 'framer-motion';
 import { useGame } from './hooks/useGame';
 import { Navigation, Header } from './components/Navigation';
-import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCircle, Copy, Check, X } from 'lucide-react';
-import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAME, LEVELS } from './lib/constants';
+import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCircle, Copy, Check, X, Pickaxe, Info, TrendingUp, Clock } from 'lucide-react';
+import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAME, LEVELS, MINE_CARDS, MineCard } from './lib/constants';
 import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
@@ -26,7 +26,13 @@ export default function App() {
   };
 
   const [isAdminPath, setIsAdminPath] = useState(checkIsAdmin());
-  const { user, loading, syncing, tap, levelUp, setUser, settings, myReferrals } = useGame(activeTab, isAdminPath);
+  const hapticFeedback = () => {
+    try {
+      WebApp.HapticFeedback.impactOccurred('medium');
+    } catch (e) {}
+  };
+
+  const { user, loading, syncing, tap, levelUp, buyCard, setUser, settings, myReferrals } = useGame(activeTab, isAdminPath);
   const [adCooldown, setAdCooldown] = useState(0);
   const [verifyingTask, setVerifyingTask] = useState<string | null>(null);
   const [taps, setTaps] = useState<{ id: number; x: number; y: number; value: number }[]>([]);
@@ -35,6 +41,7 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
+  const [mineCategory, setMineCategory] = useState<'Markets' | 'PR&Team' | 'Legal' | 'Special'>('Markets');
   const tapContainerRef = useRef<HTMLDivElement>(null);
 
   // Simple Router based on path/search/hash
@@ -79,6 +86,7 @@ export default function App() {
           const q = query(collection(db, 'users'), orderBy('coins', 'desc'), limit(50));
           const snapshot = await getDocs(q);
           const leaders = snapshot.docs.map(doc => ({
+            uid: doc.id,
             username: doc.data().username || 'Anonymous',
             coins: doc.data().coins || 0,
             level: doc.data().level || 1
@@ -756,6 +764,119 @@ export default function App() {
     </div>
   );
 
+  const renderMine = () => {
+    const categories: ('Markets' | 'PR&Team' | 'Legal' | 'Special')[] = ['Markets', 'PR&Team', 'Legal', 'Special'];
+    const totalProfitPerHour = Math.floor((user?.passiveIncomeRate || 0) * 3600);
+
+    return (
+      <div className="flex flex-col h-full bg-black">
+        <div className="px-5 pt-4 pb-2 flex flex-col gap-4 sticky top-0 bg-black z-20">
+          {/* Stats Header */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-[#1a1a1a] rounded-2xl border border-white/5 p-3 flex flex-col items-center text-center shadow-lg">
+              <TrendingUp size={18} className="text-accent-gold mb-1" />
+              <span className="text-[9px] uppercase font-bold text-text-secondary tracking-widest">Profit per hour</span>
+              <span className="text-md font-black text-white italic">+{totalProfitPerHour.toLocaleString()}</span>
+            </div>
+            <div className="bg-[#1a1a1a] rounded-2xl border border-white/5 p-3 flex flex-col items-center text-center shadow-lg">
+              <Clock size={18} className="text-accent-blue mb-1" />
+              <span className="text-[9px] uppercase font-bold text-text-secondary tracking-widest">Offline Limit</span>
+              <span className="text-md font-black text-white italic">3 Hours</span>
+            </div>
+          </div>
+
+          {/* Categories Selector */}
+          <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 overflow-x-auto no-scrollbar gap-1 custom-scrollbar">
+            {categories.map(cat => (
+              <button
+                key={cat}
+                id={`cat-${cat.toLowerCase().replace(/&/g, '')}`}
+                onClick={() => {
+                  setMineCategory(cat);
+                  hapticFeedback();
+                }}
+                className={`flex-1 py-2.5 px-3 rounded-lg text-[9px] uppercase tracking-widest font-black transition-all whitespace-nowrap min-w-[80px] select-none ${
+                  mineCategory === cat 
+                    ? 'bg-accent-gold text-black shadow-md' 
+                    : 'text-text-secondary active:bg-white/10'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Cards Grid - Scrollable area */}
+        <div className="flex-1 overflow-y-auto px-5 pb-32 no-scrollbar">
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            {MINE_CARDS.filter(c => c.category === mineCategory).map(card => {
+              const level = user?.mineCards?.[card.id] || 0;
+              const upgradeCost = Math.floor(card.baseCost * Math.pow(1.5, level));
+              const profitIncrease = card.baseProfit;
+              const canAfford = (user?.coins || 0) >= upgradeCost;
+
+              return (
+                <div 
+                  key={card.id}
+                  id={`card-${card.id}`}
+                  onClick={() => {
+                      if (canAfford) buyCard(card.id);
+                  }}
+                  className="bg-[#151515] rounded-[24px] border border-white/5 p-4 flex flex-col gap-3 relative overflow-hidden shadow-md active:scale-[0.97] transition-all duration-100 select-none touch-manipulation"
+                >
+                  <div className="flex items-center justify-between relative z-10">
+                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-accent-gold">
+                      <Pickaxe size={20} />
+                    </div>
+                    <div className="text-[8px] font-black text-accent-gold px-2 py-0.5 bg-accent-gold/10 rounded-full border border-accent-gold/20">
+                      L{level}
+                    </div>
+                  </div>
+
+                  <div className="relative z-10 flex-1">
+                    <h4 className="text-[12px] font-black text-white leading-tight mb-1 tracking-tight truncate">{card.name}</h4>
+                    <p className="text-[9px] text-text-secondary leading-tight line-clamp-2 h-[22px]">{card.description}</p>
+                  </div>
+
+                  <div className="pt-2 border-t border-white/5 relative z-10 mt-auto">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[8px] font-bold text-text-secondary uppercase">Profit/h</span>
+                      <span className="text-[9px] font-black text-accent-gold">+{profitIncrease.toLocaleString()}</span>
+                    </div>
+                    
+                    <div
+                      className={`w-full py-2.5 rounded-[12px] flex items-center justify-center gap-1.5 transition-all ${
+                        canAfford 
+                          ? 'bg-accent-gold text-black font-black text-[10px] shadow-sm' 
+                          : 'bg-white/5 text-text-secondary font-bold text-[10px] opacity-40'
+                      }`}
+                    >
+                      <Coins size={12} />
+                      <span>
+                        {upgradeCost >= 1000000 ? `${(upgradeCost/1000000).toFixed(1)}M` : upgradeCost >= 1000 ? `${(upgradeCost/1000).toFixed(1)}K` : upgradeCost.toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="absolute -bottom-8 -right-8 w-20 h-20 bg-white/[0.02] rounded-full blur-2xl" />
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 text-center p-5 bg-white/5 rounded-2xl border border-white/5 mb-4">
+             <Info size={18} className="mx-auto text-text-secondary mb-2" />
+             <p className="text-[10px] text-text-secondary font-medium leading-relaxed">
+               Upgrading cards increases your <span className="text-white font-bold">Profit Per Hour</span>. 
+               Coins are collected automatically for up to <span className="text-white font-bold">3 hours</span> while you are offline.
+             </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (isAdminPath) {
     return <AdminPanel />;
   }
@@ -774,45 +895,46 @@ export default function App() {
       <div className="w-full min-h-screen bg-bg-main relative flex flex-col overflow-hidden">
         <Header user={user} syncing={syncing} setUser={setUser} />
         
-        <main className="flex-1 flex flex-col pb-24 h-full relative">
+        <main className="flex-1 h-0 relative">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.2 }}
-              className="h-full"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="h-full overflow-hidden"
             >
-              {activeTab === 'home' && renderHome()}
-              {activeTab === 'tasks' && renderTasks()}
-              {activeTab === 'friends' && renderFriends()}
+              {activeTab === 'home' && <div className="h-full overflow-y-auto pb-24 no-scrollbar">{renderHome()}</div>}
+              {activeTab === 'mine' && renderMine()}
+              {activeTab === 'tasks' && <div className="h-full overflow-y-auto pb-24 no-scrollbar">{renderTasks()}</div>}
+              {activeTab === 'friends' && <div className="h-full overflow-y-auto pb-24 no-scrollbar">{renderFriends()}</div>}
               {activeTab === 'leaders' && (
-                <div className="p-5 flex flex-col gap-4">
-                  <h2 className="text-2xl font-bold text-white tracking-tight italic">Global Elite</h2>
-                  <div className="bg-card-bg rounded-2xl border border-white/5 overflow-hidden shadow-xl flex flex-col max-h-[70vh]">
-                    <div className="p-4 bg-white/5 flex justify-between items-center text-[10px] uppercase font-bold text-text-secondary tracking-widest sticky top-0 z-10 backdrop-blur-md">
+                <div className="p-5 flex flex-col gap-4 h-full overflow-hidden">
+                  <h2 className="text-2xl font-bold text-white tracking-tight italic uppercase">Global Elite</h2>
+                  <div className="bg-card-bg rounded-2xl border border-white/5 overflow-hidden shadow-xl flex flex-col flex-1 mb-24">
+                    <div className="p-4 bg-white/5 flex justify-between items-center text-[10px] uppercase font-bold text-text-secondary tracking-widest sticky top-0 z-10">
                       <span>Rank / Player</span>
                       <span>Coins</span>
                     </div>
-                    <div className="overflow-y-auto flex-1">
+                    <div className="overflow-y-auto flex-1 no-scrollbar">
                       {loadingLeaders ? (
                         <div className="p-10 flex justify-center">
                            <div className="w-6 h-6 border-2 border-accent-gold border-t-transparent rounded-full animate-spin" />
                         </div>
                       ) : leaderboard.length > 0 ? (
                         leaderboard.map((leader, index) => (
-                          <div key={index} className="p-4 flex items-center justify-between border-t border-white/5 hover:bg-white/5 transition-colors">
+                          <div key={index} className={`p-4 flex items-center justify-between border-t border-white/5 hover:bg-white/5 transition-colors ${leader.uid === user?.uid ? 'bg-accent-gold/10 border-accent-gold/20' : ''}`}>
                             <div className="flex items-center gap-3">
                               <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] ${index === 0 ? 'bg-accent-gold text-black' : index === 1 ? 'bg-gray-400 text-black' : index === 2 ? 'bg-amber-600 text-white' : 'text-white/40'}`}>
                                 {index + 1}
                               </span>
                               <div>
                                 <p className="text-sm font-bold text-white truncate max-w-[120px]">{leader.username}</p>
-                                <p className="text-[9px] text-accent-gold uppercase font-black">Lvl {leader.level}</p>
+                                <p className="text-[9px] text-accent-gold uppercase font-black tracking-wide">Lvl {leader.level}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1 font-black text-sm text-accent-gold">
+                            <div className="flex items-center gap-1 font-black text-sm text-accent-gold italic">
                               {Math.floor(leader.coins).toLocaleString()} <Coins size={12} />
                             </div>
                           </div>
@@ -824,12 +946,12 @@ export default function App() {
                       )}
                     </div>
                     {/* Your position footer */}
-                    <div className="p-4 bg-accent-gold/10 border-t-2 border-accent-gold/40 flex items-center justify-between sticky bottom-0 z-10 backdrop-blur-md">
+                    <div className="p-4 bg-accent-gold/20 border-t border-accent-gold/40 flex items-center justify-between sticky bottom-0 z-10">
                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-accent-gold text-black flex items-center justify-center font-bold text-[10px]">YOU</div>
-                          <p className="text-sm font-bold text-white italic">{user?.username}</p>
+                          <div className="w-8 h-8 rounded-lg bg-accent-gold text-black flex items-center justify-center font-black text-[10px]">YOU</div>
+                          <p className="text-sm font-black text-white italic">{user?.username}</p>
                         </div>
-                        <div className="flex items-center gap-1 font-black text-sm text-accent-gold">
+                        <div className="flex items-center gap-1 font-black text-sm text-accent-gold italic">
                           {Math.floor(user?.coins || 0).toLocaleString()} <Coins size={12} />
                         </div>
                     </div>

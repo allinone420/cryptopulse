@@ -5,9 +5,23 @@ import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, increment, getDocFromServer, query, collection, orderBy, limit, getDocs, where } from 'firebase/firestore';
 import { initTelegram, hapticFeedback } from '../lib/telegram';
 import { UserData } from '../types/game';
-import { INITIAL_ENERGY, ENERGY_REFILL_RATE, LEVELS, REFERRAL_REWARD_REFERRER, REFERRAL_REWARD_REFEREE } from '../lib/constants';
+import { INITIAL_ENERGY, ENERGY_REFILL_RATE, LEVELS, REFERRAL_REWARD_REFERRER, REFERRAL_REWARD_REFEREE, MINE_CARDS } from '../lib/constants';
 import { useTonAddress, useTonWallet } from '@tonconnect/ui-react';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
+
+const calculatePassiveRate = (level: number, mineCards: { [id: string]: number } = {}) => {
+  const currentLevel = LEVELS.find(l => l.level === level) || LEVELS[0];
+  let cardIncomePerHour = 0;
+  
+  Object.entries(mineCards).forEach(([id, cardLevel]) => {
+    const card = MINE_CARDS.find(c => c.id === id);
+    if (card) {
+      cardIncomePerHour += card.baseProfit * cardLevel;
+    }
+  });
+  
+  return currentLevel.passiveRate + (cardIncomePerHour / 3600);
+};
 
 export const useGame = (activeTab?: string, skipInit: boolean = false) => {
   const [user, setUser] = useState<UserData | null>(null);
@@ -168,13 +182,16 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
             const secondsPassed = Math.floor((now - lastUpdate) / 1000);
             
             if (secondsPassed > 1) {
-              const currentLevel = LEVELS.find(l => l.level === data.level) || LEVELS[0];
-              const offlineIncome = currentLevel.passiveRate * secondsPassed;
+              // Hamster style: Cap offline income at 3 hours (10800 seconds)
+              const effectiveSeconds = Math.min(secondsPassed, 10800);
+              const currentRate = calculatePassiveRate(data.level, data.mineCards || {});
+              const offlineIncome = currentRate * effectiveSeconds;
+              
               data.coins += offlineIncome;
               data.totalCoins += offlineIncome;
               data.lastPassiveIncomeUpdate = now;
               
-              // Also refill energy
+              // Energy refill
               const energyRefill = ENERGY_REFILL_RATE * secondsPassed;
               data.energy = Math.min(data.maxEnergy, data.energy + energyRefill);
               data.lastEnergyUpdate = now;
@@ -255,7 +272,8 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
               lastAdView: null,
               adCompletions: {},
               dailyStreak: 0,
-              level: 1
+              level: 1,
+              mineCards: {}
             };
             
             try {
@@ -456,16 +474,18 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     if (!user) return;
     
     const nextLevel = LEVELS.find(l => l.level === user.level + 1);
-    if (!nextLevel) return; // Max level reached
+    if (!nextLevel) return;
 
     if (user.coins >= nextLevel.upgradeCost) {
+      const newMineCards = user.mineCards || {};
+      const newRate = calculatePassiveRate(nextLevel.level, newMineCards);
+      
       const newUser = {
         ...user,
         coins: user.coins - nextLevel.upgradeCost,
         level: nextLevel.level,
         maxEnergy: nextLevel.maxEnergy,
-        passiveIncomeRate: nextLevel.passiveRate,
-        // Refill energy on level up
+        passiveIncomeRate: newRate,
         energy: nextLevel.maxEnergy
       };
       
@@ -479,6 +499,42 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
           maxEnergy: newUser.maxEnergy,
           passiveIncomeRate: newUser.passiveIncomeRate,
           energy: Math.floor(newUser.energy)
+        });
+        hapticFeedback();
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
+      }
+    }
+  }, [user]);
+
+  const buyCard = useCallback(async (cardId: string) => {
+    if (!user) return;
+    
+    const card = MINE_CARDS.find(c => c.id === cardId);
+    if (!card) return;
+
+    const currentLevel = user.mineCards?.[cardId] || 0;
+    const upgradeCost = Math.floor(card.baseCost * Math.pow(1.5, currentLevel));
+    
+    if (user.coins >= upgradeCost) {
+      const newMineCards = { ...(user.mineCards || {}), [cardId]: currentLevel + 1 };
+      const newRate = calculatePassiveRate(user.level, newMineCards);
+      
+      const newUser = {
+        ...user,
+        coins: user.coins - upgradeCost,
+        mineCards: newMineCards,
+        passiveIncomeRate: newRate
+      };
+      
+      setUser(newUser);
+      
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          coins: Math.floor(newUser.coins),
+          mineCards: newMineCards,
+          passiveIncomeRate: newRate
         });
         hapticFeedback();
       } catch (err) {
@@ -512,5 +568,5 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     }
   }, [activeTab, user?.uid]);
 
-  return { user, loading, syncing, tap, levelUp, setUser, settings, myReferrals };
+  return { user, loading, syncing, tap, levelUp, buyCard, setUser, settings, myReferrals };
 };
