@@ -9,7 +9,7 @@ import { INITIAL_ENERGY, ENERGY_REFILL_RATE, LEVELS, REFERRAL_REWARD_REFERRER, R
 import { useTonAddress, useTonWallet } from '@tonconnect/ui-react';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 
-export const useGame = (activeTab?: string) => {
+export const useGame = (activeTab?: string, skipInit: boolean = false) => {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -88,12 +88,25 @@ export const useGame = (activeTab?: string) => {
       }
     };
 
+    if (skipInit) {
+      fetchGlobalSettings();
+      setLoading(false);
+      return;
+    }
+
     fetchGlobalSettings();
 
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       try {
         const tgUser = WebApp?.initDataUnsafe?.user;
         const currentTgId = tgUser?.id;
+
+        // If we are in a Telegram environment but don't have user data yet, 
+        // wait for the next effect trigger (since we depend on the user ID)
+        // This prevents creating "blank" accounts before Telegram is ready.
+        if (WebApp?.initData && !currentTgId) {
+           return;
+        }
 
         if (fbUser) {
           const targetUid = fbUser.uid;
@@ -109,13 +122,39 @@ export const useGame = (activeTab?: string) => {
           if (userSnap.exists()) {
             const data = userSnap.data() as UserData;
             
-            // SECURITY CHECK
+            // SECURITY CHECK: If this account has a DIFFERENT Telegram ID than the current session, sign out.
+            // This prevents account hijacking or accidental session sharing in shared browsers.
             if (currentTgId && data.telegramId && data.telegramId !== currentTgId) {
               console.warn('Session conflict detected! Signing out...');
               await auth.signOut();
               return; 
             }
             
+            // If the account has no Telegram ID (telegramId: 0) but we have one now,
+            // we MUST check if this Telegram ID already exists elsewhere before claiming it.
+            if (currentTgId && (data.telegramId === 0 || !data.telegramId)) {
+                try {
+                  const q = query(collection(db, 'users'), where('telegramId', '==', currentTgId), limit(1));
+                  const existingSnap = await getDocs(q);
+                  
+                  if (!existingSnap.empty) {
+                    // This Telegram ID is already linked to another account!
+                    // Merge or migrate them.
+                    const existingData = existingSnap.docs[0].data() as UserData;
+                    const migratedUser: UserData = {
+                      ...existingData,
+                      uid: targetUid,
+                      lastActive: Date.now()
+                    };
+                    await setDoc(userRef, migratedUser);
+                    setUser(migratedUser);
+                    return;
+                  }
+                } catch (err) {
+                  console.error("Telegram ID duplicate check failed:", err);
+                }
+            }
+
             // Refresh data with current Telegram info if it changed
             if (tgUser && (data.username !== (tgUser.username || tgUser.first_name) || data.telegramId === 0)) {
                data.username = tgUser.username || tgUser.first_name || data.username;
@@ -242,15 +281,9 @@ export const useGame = (activeTab?: string) => {
             setUser(newUser);
           }
         } else {
-          // If no Firebase user, attempt to sign in
-          // Skip anonymous login if we are on the admin page to avoid creating excessive guest accounts
-          const isAdminPage = window.location.search.includes('admin') || 
-                            window.location.hash.includes('admin') || 
-                            window.location.pathname.includes('/admin');
-          
-          if (!isAdminPage) {
-            await signInAnonymously(auth);
-          }
+          // If no Firebase user, attempt to sign in anonymounsly if not an admin page
+          // This avoids creating guest accounts for admins on refresh
+          await signInAnonymously(auth);
         }
       } catch (err) {
         console.error('Initialization error:', err);
@@ -260,7 +293,7 @@ export const useGame = (activeTab?: string) => {
     });
 
     return () => unsub();
-  }, [WebApp?.initDataUnsafe?.user?.id]);
+  }, [WebApp?.initDataUnsafe?.user?.id, skipInit]);
   useEffect(() => {
     if (!user) return;
 

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, animate } from 'framer-motion';
 import { useGame } from './hooks/useGame';
 import { Navigation, Header } from './components/Navigation';
-import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCircle, Copy, Check } from 'lucide-react';
+import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCircle, Copy, Check, X } from 'lucide-react';
 import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAME, LEVELS } from './lib/constants';
 import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
@@ -13,10 +13,7 @@ import AdminPanel from './components/AdminPanel';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
-  const { user, loading, syncing, tap, levelUp, setUser, settings, myReferrals } = useGame(activeTab);
-  const [adCooldown, setAdCooldown] = useState(0);
-  const [verifyingTask, setVerifyingTask] = useState<string | null>(null);
-
+  
   const checkIsAdmin = () => {
     const url = window.location.href.toLowerCase();
     const params = new URLSearchParams(window.location.search);
@@ -29,6 +26,9 @@ export default function App() {
   };
 
   const [isAdminPath, setIsAdminPath] = useState(checkIsAdmin());
+  const { user, loading, syncing, tap, levelUp, setUser, settings, myReferrals } = useGame(activeTab, isAdminPath);
+  const [adCooldown, setAdCooldown] = useState(0);
+  const [verifyingTask, setVerifyingTask] = useState<string | null>(null);
   const [taps, setTaps] = useState<{ id: number; x: number; y: number; value: number }[]>([]);
   const [showDaily, setShowDaily] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
@@ -437,17 +437,20 @@ export default function App() {
     const success = tap();
     if (!success) return;
 
-    // Get exact coordinates from pointer event
-    const clientX = e.clientX;
-    const clientY = e.clientY;
+    // Get coordinates relative to the container for better positioning
+    if (tapContainerRef.current) {
+      const rect = tapContainerRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
 
-    const currentLevel = LEVELS.find(l => l.level === user.level) || LEVELS[0];
-
-    const newTap = { id: Math.random() + performance.now(), x: clientX, y: clientY, value: currentLevel.tapValue };
-    setTaps((prev) => [...prev, newTap]);
-    setTimeout(() => {
-      setTaps((prev) => prev.filter((t) => t.id !== newTap.id));
-    }, 700);
+      const currentLevel = LEVELS.find(l => l.level === user.level) || LEVELS[0];
+      const newTap = { id: Math.random() + performance.now(), x, y, value: currentLevel.tapValue };
+      
+      setTaps((prev) => [...prev, newTap]);
+      setTimeout(() => {
+        setTaps((prev) => prev.filter((t) => t.id !== newTap.id));
+      }, 700);
+    }
   };
 
   const renderHome = () => (
@@ -507,10 +510,10 @@ export default function App() {
               <motion.div
                 key={t.id}
                 initial={{ opacity: 1, y: 0 }}
-                animate={{ opacity: 0, y: -100 }}
+                animate={{ opacity: 0, y: -150 }}
                 exit={{ opacity: 0 }}
-                className="fixed pointer-events-none text-white font-black text-3xl z-50 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] select-none"
-                style={{ left: t.x - 20, top: t.y - 40 }}
+                className="absolute pointer-events-none text-white font-black text-4xl z-50 drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)] select-none"
+                style={{ left: t.x - 20, top: t.y - 20 }}
               >
                 +{t.value}
               </motion.div>
@@ -896,26 +899,29 @@ export default function App() {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-card-bg w-full max-w-sm rounded-[32px] border border-white/10 p-6 flex flex-col gap-5 shadow-2xl relative max-h-[90vh] overflow-y-auto custom-scrollbar"
+              className="bg-card-bg w-full max-w-sm rounded-[32px] border border-white/10 flex flex-col shadow-2xl relative max-h-[90vh] overflow-hidden"
             >
-              <button 
-                onClick={() => setShowLevelUp(false)}
-                className="absolute top-4 right-4 p-2 hover:bg-white/5 rounded-full text-text-secondary"
-              >
-                <CheckCircle2 size={24} className="rotate-45" />
-              </button>
-
-              <div className="flex flex-col items-center gap-4 text-center">
-                <div className="w-20 h-20 bg-accent-gold/20 rounded-[28px] flex items-center justify-center text-accent-gold shadow-lg shadow-accent-gold/10">
-                  <Trophy size={40} />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-black italic text-white leading-tight">LEVEL UPGRADE</h3>
-                  <p className="text-text-secondary text-sm">Enhance your tapping power</p>
-                </div>
+              <div className="absolute top-4 right-4 z-20">
+                <button 
+                  onClick={() => setShowLevelUp(false)}
+                  className="p-2 bg-white/5 hover:bg-white/10 rounded-full text-text-secondary transition-colors"
+                >
+                  <X size={20} />
+                </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                <div className="flex flex-col items-center gap-4 text-center mb-6">
+                  <div className="w-20 h-20 bg-accent-gold/20 rounded-[28px] flex items-center justify-center text-accent-gold shadow-lg shadow-accent-gold/10 mt-2">
+                    <Trophy size={40} />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black italic text-white leading-tight">LEVEL UPGRADE</h3>
+                    <p className="text-text-secondary text-sm">Enhance your tapping power</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-6">
                  <div className="p-4 bg-black/40 rounded-2xl border border-white/5 text-center">
                     <p className="text-[10px] text-text-secondary uppercase font-bold mb-1">Current</p>
                     <p className="text-lg font-black text-white">{currentLevelInfo.name}</p>
@@ -950,8 +956,8 @@ export default function App() {
                   </div>
 
                   {/* Level Roadmap */}
-                  <div className="flex flex-col gap-2 mt-2 max-h-[120px] overflow-y-auto pr-2 custom-scrollbar">
-                    <p className="text-[10px] text-text-secondary uppercase font-black sticky top-0 bg-card-bg py-1">Roadmap (Available Levels)</p>
+                  <div className="flex flex-col gap-2 mt-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar bg-black/20 p-3 rounded-2xl border border-white/5">
+                    <p className="text-[10px] text-text-secondary uppercase font-black sticky top-0 bg-transparent py-1 backdrop-blur-sm">Roadmap (Available Levels)</p>
                     {LEVELS.map((lvl) => (
                       <div key={lvl.level} className={`flex justify-between items-center p-2 rounded-lg text-[10px] ${lvl.level === user?.level ? 'bg-accent-gold/20' : 'bg-black/20'}`}>
                         <div className="flex items-center gap-2">
@@ -976,6 +982,7 @@ export default function App() {
                   You are at the Maximum Level! 🏆
                 </div>
               )}
+              </div>
             </motion.div>
           </div>
         )}
