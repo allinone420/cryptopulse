@@ -30,17 +30,14 @@ export default function AdminPanel() {
   const [refereeReward, setRefereeReward] = useState(2500);
   const [passiveCommission, setPassiveCommission] = useState(10);
   const [adsEnabled, setAdsEnabled] = useState(true);
-  const [interstitialEnabled, setInterstitialEnabled] = useState(false);
-  const [interstitialReward, setInterstitialReward] = useState(5000);
-  const [bannerEnabled, setBannerEnabled] = useState(false);
-  const [bannerReward, setBannerReward] = useState(2000);
-  const [adTasks, setAdTasks] = useState<any[]>([]); // Array of {id, title, reward}
+  const [adTasks, setAdTasks] = useState<any[]>([]); // Array of {id, title, reward, type}
   const [tgBotToken, setTgBotToken] = useState('');
   const [tgChannelId, setTgChannelId] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
 
   const [newAdTitle, setNewAdTitle] = useState('');
   const [newAdReward, setNewAdReward] = useState(10000);
+  const [newAdType, setNewAdType] = useState<'video' | 'popup'>('video');
 
   const addAdTask = () => {
     if (!newAdTitle.trim()) return;
@@ -48,6 +45,7 @@ export default function AdminPanel() {
       id: 'ad_' + Date.now(),
       title: newAdTitle.trim(),
       reward: newAdReward,
+      type: newAdType,
     };
     setAdTasks([...adTasks, newTask]);
     setNewAdTitle('');
@@ -124,10 +122,6 @@ export default function AdminPanel() {
         refereeReward,
         passiveCommission,
         adsEnabled,
-        interstitialEnabled,
-        interstitialReward,
-        bannerEnabled,
-        bannerReward,
         adTasks,
         tgBotToken,
         tgChannelId,
@@ -216,10 +210,6 @@ export default function AdminPanel() {
         setRefereeReward(data.refereeReward || 2500);
         setPassiveCommission(data.passiveCommission || 10);
         setAdsEnabled(data.adsEnabled !== undefined ? data.adsEnabled : true);
-        setInterstitialEnabled(data.interstitialEnabled || false);
-        setInterstitialReward(data.interstitialReward || 5000);
-        setBannerEnabled(data.bannerEnabled || false);
-        setBannerReward(data.bannerReward || 2000);
         setAdTasks(data.adTasks || []);
         setTgBotToken(data.tgBotToken || '');
         setTgChannelId(data.tgChannelId || '');
@@ -481,8 +471,8 @@ export default function AdminPanel() {
                 <div className="flex flex-col gap-6">
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
                     <div>
-                      <p className="font-bold text-white uppercase text-xs tracking-wider">Enable Reward Video Ads</p>
-                      <p className="text-[10px] text-text-secondary italic">Toggle rewarded video monetization visibility.</p>
+                      <p className="font-bold text-white uppercase text-xs tracking-wider">Enable Forced/Global Ads</p>
+                      <p className="text-[10px] text-text-secondary italic">Toggle visibility of all monetization sections.</p>
                     </div>
                     <button 
                       onClick={() => setAdsEnabled(!adsEnabled)}
@@ -492,56 +482,6 @@ export default function AdminPanel() {
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
-                    <div>
-                      <p className="font-bold text-white uppercase text-xs tracking-wider">Enable Pop-up (Interstitial) Ads</p>
-                      <p className="text-[10px] text-text-secondary italic">Show pop-up ads during game sessions.</p>
-                    </div>
-                    <button 
-                      onClick={() => setInterstitialEnabled(!interstitialEnabled)}
-                      className={`w-12 h-6 rounded-full transition-colors relative ${interstitialEnabled ? 'bg-yellow-500' : 'bg-white/20'}`}
-                    >
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${interstitialEnabled ? 'right-1' : 'left-1'}`} />
-                    </button>
-                  </div>
-
-                  {interstitialEnabled && (
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Pop-up Reward (Coins)</label>
-                      <input 
-                        type="number" 
-                        value={interstitialReward}
-                        onChange={(e) => setInterstitialReward(Number(e.target.value))}
-                        className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold"
-                      />
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
-                    <div>
-                      <p className="font-bold text-white uppercase text-xs tracking-wider">Enable Banner Ads</p>
-                      <p className="text-[10px] text-text-secondary italic">Show static banners in tabs.</p>
-                    </div>
-                    <button 
-                      onClick={() => setBannerEnabled(!bannerEnabled)}
-                      className={`w-12 h-6 rounded-full transition-colors relative ${bannerEnabled ? 'bg-orange-500' : 'bg-white/20'}`}
-                    >
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${bannerEnabled ? 'right-1' : 'left-1'}`} />
-                    </button>
-                  </div>
-
-                  {bannerEnabled && (
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Banner Reward (Coins)</label>
-                      <input 
-                        type="number" 
-                        value={bannerReward}
-                        onChange={(e) => setBannerReward(Number(e.target.value))}
-                        className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold"
-                      />
-                    </div>
-                  )}
-
                   <div className="flex flex-col gap-4">
                     <p className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Manage Reward Ads</p>
                     
@@ -550,7 +490,12 @@ export default function AdminPanel() {
                       {adTasks.map((task) => (
                         <div key={task.id} className="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-white/5">
                           <div>
-                            <p className="font-bold text-sm tracking-tight">{task.title}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-sm tracking-tight">{task.title}</p>
+                              <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded font-black uppercase tracking-widest opacity-60">
+                                {task.type || 'video'}
+                              </span>
+                            </div>
                             <p className="text-[10px] text-accent-gold font-black italic">+{task.reward.toLocaleString()} Coins</p>
                           </div>
                           <button 
@@ -571,6 +516,25 @@ export default function AdminPanel() {
                     {/* Add New Ad */}
                     <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col gap-4">
                       <p className="text-[10px] font-black uppercase tracking-widest text-accent-gold">Add New Ad Slot</p>
+                      
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] uppercase font-medium text-text-secondary ml-1">Ad Type</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button 
+                            onClick={() => setNewAdType('video')}
+                            className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${newAdType === 'video' ? 'bg-accent-gold/20 border-accent-gold text-accent-gold' : 'bg-black/20 border-white/5 text-text-secondary'}`}
+                          >
+                            Reward Video
+                          </button>
+                          <button 
+                            onClick={() => setNewAdType('popup')}
+                            className={`py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${newAdType === 'popup' ? 'bg-accent-gold/20 border-accent-gold text-accent-gold' : 'bg-black/20 border-white/5 text-text-secondary'}`}
+                          >
+                            Reward Popup
+                          </button>
+                        </div>
+                      </div>
+
                       <div className="flex flex-col gap-2">
                         <label className="text-[10px] uppercase font-medium text-text-secondary ml-1">Ad Title</label>
                         <input 

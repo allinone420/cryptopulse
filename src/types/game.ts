@@ -2,6 +2,7 @@ export interface AdTask {
   id: string;
   title: string;
   reward: number;
+  type: 'video' | 'popup';
 }
 
 export interface GlobalSettings {
@@ -9,10 +10,6 @@ export interface GlobalSettings {
   refereeReward: number;
   passiveCommission: number;
   adsEnabled: boolean;
-  interstitialEnabled?: boolean;
-  interstitialReward?: number;
-  bannerEnabled?: boolean;
-  bannerReward?: number;
   adTasks?: AdTask[];
   tgBotToken?: string;
   tgChannelId?: string;

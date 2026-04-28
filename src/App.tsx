@@ -16,46 +16,7 @@ export default function App() {
   const { user, loading, syncing, tap, levelUp, setUser, settings, myReferrals } = useGame(activeTab);
   const [adCooldown, setAdCooldown] = useState(0);
   const [verifyingTask, setVerifyingTask] = useState<string | null>(null);
-  const [lastInterstitial, setLastInterstitial] = useState(Date.now());
 
-  useEffect(() => {
-    // Interstitial Ad Logic
-    if (settings?.interstitialEnabled && user) {
-      const interval = setInterval(() => {
-        const now = Date.now();
-        // Show every 5 minutes if active
-        if (now - lastInterstitial > 5 * 60 * 1000) {
-          showInterstitial();
-        }
-      }, 30000); // Check every 30s
-      return () => clearInterval(interval);
-    }
-  }, [settings, user, lastInterstitial]);
-
-  const showInterstitial = () => {
-    if (typeof (window as any).show_10932949 !== 'function') return;
-    
-    (window as any).show_10932949('pop').then(() => {
-      setLastInterstitial(Date.now());
-      const reward = settings?.interstitialReward || 5000;
-      
-      setUser(prev => prev ? ({
-        ...prev,
-        coins: prev.coins + reward,
-        totalCoins: prev.totalCoins + reward
-      }) : null);
-
-      if (user) {
-        updateDoc(doc(db, 'users', user.uid), {
-          coins: increment(reward),
-          totalCoins: increment(reward)
-        });
-      }
-      
-      WebApp.HapticFeedback.notificationOccurred('success');
-    }).catch((e: any) => console.log("Interstitial ad error:", e));
-  };
-  
   const checkIsAdmin = () => {
     const url = window.location.href.toLowerCase();
     const params = new URLSearchParams(window.location.search);
@@ -362,7 +323,10 @@ export default function App() {
     }
     
     // Safety timeout
-    const adPromise = (window as any).show_10932949();
+    const adPromise = task.type === 'popup' 
+      ? (window as any).show_10932949('pop') 
+      : (window as any).show_10932949();
+
     const timeoutPromise = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('Ad load timeout')), 60000)
     );
@@ -441,41 +405,6 @@ export default function App() {
     setTimeout(() => {
       setTaps((prev) => prev.filter((t) => t.id !== newTap.id));
     }, 700);
-  };
-
-  const claimBannerReward = () => {
-    if (!user || !settings?.bannerEnabled) return;
-    
-    // Daily limit for banner
-    const bannerId = 'banner_daily';
-    if (user.adCompletions && user.adCompletions[bannerId]) {
-      const last = new Date(user.adCompletions[bannerId]);
-      const now = new Date();
-      if (last.toISOString().split('T')[0] === now.toISOString().split('T')[0]) {
-        alert("You have already claimed your banner reward today!");
-        return;
-      }
-    }
-
-    const reward = settings.bannerReward || 2000;
-    const now = Date.now();
-    
-    setUser(prev => prev ? ({
-      ...prev,
-      coins: prev.coins + reward,
-      totalCoins: prev.totalCoins + reward,
-      adCompletions: { ...(prev.adCompletions || {}), [bannerId]: now }
-    }) : null);
-
-    updateDoc(doc(db, 'users', user.uid), {
-      coins: increment(reward),
-      totalCoins: increment(reward),
-      adCompletions: { ...(user.adCompletions || {}), [bannerId]: now }
-    });
-
-    confetti({ particleCount: 50, spread: 60, origin: { y: 0.8 } });
-    WebApp.HapticFeedback.notificationOccurred('success');
-    alert(`Reward of ${reward} coins claimed!`);
   };
 
   const renderHome = () => (
@@ -564,33 +493,6 @@ export default function App() {
             animate={{ width: `${((user?.energy || 0) / (user?.maxEnergy || 1)) * 100}%` }}
           />
         </div>
-
-        {/* Banner Ad Section */}
-        {settings?.bannerEnabled && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-4 px-5"
-          >
-            <div className="bg-gradient-to-r from-[#2481cc]/20 to-purple-600/20 border border-white/10 p-4 rounded-3xl flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-[#2481cc]/20 rounded-xl flex items-center justify-center text-[#2481cc]">
-                  <PlayCircle size={20} />
-                </div>
-                <div>
-                  <p className="text-white font-bold text-xs">Official Partner</p>
-                  <p className="text-[10px] text-accent-gold font-black uppercase tracking-widest">+{settings.bannerReward?.toLocaleString()} Daily Reward</p>
-                </div>
-              </div>
-              <button 
-                onClick={claimBannerReward}
-                className="bg-[#2481cc] text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all"
-              >
-                Claim
-              </button>
-            </div>
-          </motion.div>
-        )}
       </div>
     </div>
   );
