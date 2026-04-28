@@ -116,6 +116,13 @@ export const useGame = (activeTab?: string) => {
               return; 
             }
             
+            // Refresh data with current Telegram info if it changed
+            if (tgUser && (data.username !== (tgUser.username || tgUser.first_name) || data.telegramId === 0)) {
+               data.username = tgUser.username || tgUser.first_name || data.username;
+               data.firstName = tgUser.first_name || data.firstName;
+               data.telegramId = currentTgId || data.telegramId;
+            }
+
             // Calculate Offline Income
             const now = Date.now();
             const lastUpdate = data.lastPassiveIncomeUpdate || data.lastActive || now;
@@ -136,6 +143,34 @@ export const useGame = (activeTab?: string) => {
             
             setUser(data);
           } else {
+            // Check if this Telegram ID already exists in our database under a different UID
+            if (currentTgId) {
+              try {
+                const q = query(collection(db, 'users'), where('telegramId', '==', currentTgId), limit(1));
+                const existingSnap = await getDocs(q);
+                
+                if (!existingSnap.empty) {
+                  // This user already exists! Migrate them to this new UID
+                  const existingData = existingSnap.docs[0].data() as UserData;
+                  
+                  // Keep original progress but update UID for this session
+                  const migratedUser: UserData = {
+                    ...existingData,
+                    uid: targetUid,
+                    lastActive: Date.now()
+                  };
+
+                  await setDoc(userRef, migratedUser);
+                  // We do NOT reward referrer here because they already had an account
+                  setUser(migratedUser);
+                  setLoading(false);
+                  return;
+                }
+              } catch (err) {
+                console.error("Telegram ID check failed:", err);
+              }
+            }
+
             // Wait for settings to load if possible, or use defaults
             const currentSettings = settings || {
               referrerReward: REFERRAL_REWARD_REFERRER,
@@ -147,8 +182,16 @@ export const useGame = (activeTab?: string) => {
             let referrerUid = null;
             if (startParam && startParam.startsWith('ref_')) {
               const potentialReferrerId = startParam.replace('ref_', '');
-              if (potentialReferrerId !== fbUser.uid) {
-                referrerUid = potentialReferrerId;
+              if (potentialReferrerId !== targetUid) {
+                // Verify referrer exists before rewarding
+                try {
+                  const refSnap = await getDoc(doc(db, 'users', potentialReferrerId));
+                  if (refSnap.exists()) {
+                    referrerUid = potentialReferrerId;
+                  }
+                } catch (e) {
+                  console.error("Error checking referrer:", e);
+                }
               }
             }
 

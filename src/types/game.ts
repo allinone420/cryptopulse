@@ -46,6 +46,7 @@ export interface Task {
   reward: number;
   type: 'telegram' | 'ads' | 'invite';
   link?: string;
+  requiredInvites?: number;
 }
 
 export interface LeaderboardEntry {

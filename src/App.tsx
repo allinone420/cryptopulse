@@ -161,6 +161,49 @@ export default function App() {
     setVerifyingTask(null);
   };
 
+  const verifyInviteTask = async (taskId: string, reward: number, requiredCount: number) => {
+    if (!user) return;
+    setVerifyingTask(taskId);
+
+    const currentInvites = user.referralCount || 0;
+
+    if (currentInvites >= requiredCount) {
+      // Check if already completed to prevent double reward
+      if (user.completedTasks.includes(taskId)) {
+        alert("You have already received the reward for this task!");
+        setVerifyingTask(null);
+        return;
+      }
+
+      const updatedUser = {
+        ...user,
+        coins: user.coins + reward,
+        totalCoins: user.totalCoins + reward,
+        completedTasks: [...(user.completedTasks || []), taskId]
+      };
+      setUser(updatedUser);
+      
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          coins: increment(reward),
+          totalCoins: increment(reward),
+          completedTasks: updatedUser.completedTasks
+        });
+      } catch (e) {
+        console.error("Failed to update task completion:", e);
+      }
+
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      WebApp.HapticFeedback.notificationOccurred('success');
+      alert(`Milestone reached! ${reward.toLocaleString()} coins added.`);
+    } else {
+      WebApp.HapticFeedback.notificationOccurred('error');
+      alert(`You need ${requiredCount} friends. Currently: ${currentInvites}`);
+    }
+    
+    setVerifyingTask(null);
+  };
+
   const nextLevel = LEVELS.find(l => l.level === (user?.level || 1) + 1);
   const currentLevelInfo = LEVELS.find(l => l.level === (user?.level || 1)) || LEVELS[0];
 
@@ -577,15 +620,27 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <button 
                       disabled={isCompleted}
-                      onClick={() => window.open(task.link, '_blank')}
+                      onClick={() => {
+                        if (task.type === 'invite') {
+                          setActiveTab('friends');
+                        } else if (task.link) {
+                          window.open(task.link, '_blank');
+                        }
+                      }}
                       className={`${isCompleted ? 'bg-gray-700 text-gray-400' : 'bg-accent-gold text-black'} px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:scale-100 min-w-[80px]`}
                     >
-                      {isCompleted ? 'Done' : 'Join'}
+                      {isCompleted ? 'Done' : task.type === 'invite' ? 'Invite' : 'Join'}
                     </button>
-                    {!isCompleted && task.type === 'telegram' && (
+                    {!isCompleted && (task.type === 'telegram' || task.type === 'invite') && (
                       <button 
                         disabled={verifyingTask === task.id}
-                        onClick={() => verifyTelegramJoin(task.id, task.reward)}
+                        onClick={() => {
+                          if (task.type === 'telegram') {
+                            verifyTelegramJoin(task.id, task.reward);
+                          } else if (task.type === 'invite') {
+                            verifyInviteTask(task.id, task.reward, task.requiredInvites || 0);
+                          }
+                        }}
                         className="bg-white/5 border border-white/10 text-white px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-white/10 active:scale-95 transition-all disabled:opacity-50 min-w-[80px] flex items-center justify-center"
                       >
                         {verifyingTask === task.id ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Check'}

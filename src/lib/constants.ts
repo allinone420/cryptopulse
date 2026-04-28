@@ -5,7 +5,11 @@ export const COINS_PER_TAP = 1;
 
 export const TASKS = [
   { id: 'tg_join', title: 'Join our Telegram Channel', reward: 500, type: 'telegram', link: 'https://t.me/SatoCryp' },
-  { id: 'invite_3', title: 'Invite 3 Friends', reward: 2000, type: 'invite' },
+  { id: 'invite_3', title: 'Invite 3 Friends', reward: 2000, type: 'invite', requiredInvites: 3 },
+  { id: 'invite_10', title: 'Invite 10 Friends', reward: 15000, type: 'invite', requiredInvites: 10 },
+  { id: 'invite_25', title: 'Invite 25 Friends', reward: 50000, type: 'invite', requiredInvites: 25 },
+  { id: 'invite_50', title: 'Invite 50 Friends', reward: 125000, type: 'invite', requiredInvites: 50 },
+  { id: 'invite_100', title: 'Invite 100 Friends', reward: 300000, type: 'invite', requiredInvites: 100 },
 ];
 
 export const DAILY_REWARD_BASE = 1000;
