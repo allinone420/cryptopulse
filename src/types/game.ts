@@ -1,3 +1,17 @@
+export interface AdTask {
+  id: string;
+  title: string;
+  reward: number;
+}
+
+export interface GlobalSettings {
+  referrerReward: number;
+  refereeReward: number;
+  passiveCommission: number;
+  adsEnabled: boolean;
+  adTasks?: AdTask[];
+}
+
 export interface UserData {
   uid: string;
   telegramId: number;
@@ -16,7 +30,8 @@ export interface UserData {
   referralCount: number;
   completedTasks: string[];
   lastDailyReward: number | null; // timestamp
-  lastAdView?: number | null; // timestamp
+  lastAdView?: number | null; // Keep for global fallback
+  adCompletions?: { [adId: string]: number }; // timestamp of last view per ad
   dailyStreak: number;
   level: number;
   lastActive?: number;

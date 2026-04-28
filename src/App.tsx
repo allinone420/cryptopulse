@@ -8,7 +8,7 @@ import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
-import { LeaderboardEntry } from './types/game';
+import { LeaderboardEntry, AdTask } from './types/game';
 import AdminPanel from './components/AdminPanel';
 
 export default function App() {
@@ -232,23 +232,23 @@ export default function App() {
   };
 
 
-  const watchAd = (taskId: string) => {
-    if (!user || (settings && !settings.adsEnabled)) return;
+  const watchAd = (task: AdTask) => {
+    if (!user || !settings?.adsEnabled) return;
     
-    // Check daily limit
-    if (user.lastAdView) {
+    // Check daily limit for THIS specific ad
+    if (user.adCompletions && user.adCompletions[task.id]) {
       try {
-        const last = new Date(user.lastAdView);
+        const last = new Date(user.adCompletions[task.id]);
         const now = new Date();
         const lastDateStr = last.toISOString().split('T')[0];
         const nowDateStr = now.toISOString().split('T')[0];
         
         if (lastDateStr === nowDateStr) {
-          alert("You have already reached your daily ad limit. Come back tomorrow!");
+          alert(`You have already watched "${task.title}" today. Come back tomorrow!`);
           return;
         }
       } catch (e) {
-        // Fallback or ignore
+        // Fallback
       }
     }
 
@@ -258,23 +258,24 @@ export default function App() {
       return;
     }
     
-    const rewardAmount = settings?.adReward || 10000;
-
-    // Safety timeout for ad call to prevent "adex timeout" hanging
-    const adPromise = taskId === 'ad_popup' ? (window as any).show_10932949('pop') : (window as any).show_10932949();
-    
-    // Create a timeout promise - increased to 60s for better tolerance
+    // Safety timeout
+    const adPromise = (window as any).show_10932949();
     const timeoutPromise = new Promise((_, reject) => 
       setTimeout(() => reject(new Error('Ad load timeout')), 60000)
     );
 
     Promise.race([adPromise, timeoutPromise]).then(() => {
       // Reward user
+      const now = Date.now();
       const updatedUser = {
         ...user,
-        coins: user.coins + rewardAmount,
-        totalCoins: user.totalCoins + rewardAmount,
-        lastAdView: Date.now()
+        coins: user.coins + task.reward,
+        totalCoins: user.totalCoins + task.reward,
+        lastAdView: now,
+        adCompletions: {
+          ...(user.adCompletions || {}),
+          [task.id]: now
+        }
       };
       
       setUser(updatedUser);
@@ -285,7 +286,8 @@ export default function App() {
         updateDoc(userRef, {
           coins: Math.floor(updatedUser.coins),
           totalCoins: Math.floor(updatedUser.totalCoins),
-          lastAdView: updatedUser.lastAdView
+          lastAdView: updatedUser.lastAdView,
+          adCompletions: updatedUser.adCompletions
         });
       } catch (err) {
         console.error("Failed to save ad reward:", err);
@@ -300,7 +302,6 @@ export default function App() {
 
       WebApp.HapticFeedback.notificationOccurred('success');
       
-      // Still set a small cooldown to prevent accidental double clicks
       setAdCooldown(5);
       const adTimer = setInterval(() => {
         setAdCooldown(prev => {
@@ -430,12 +431,11 @@ export default function App() {
   );
 
   const renderTasks = () => {
-    const isAdWatchedToday = () => {
-      if (!user?.lastAdView) return false;
+    const isAdWatchedToday = (adId: string) => {
+      if (!user?.adCompletions || !user.adCompletions[adId]) return false;
       try {
-        const last = new Date(user.lastAdView);
+        const last = new Date(user.adCompletions[adId]);
         const now = new Date();
-        // Use ISO date string (YYYY-MM-DD) for reliable same-day check
         const lastDateStr = last.toISOString().split('T')[0];
         const nowDateStr = now.toISOString().split('T')[0];
         return lastDateStr === nowDateStr;
@@ -444,61 +444,80 @@ export default function App() {
       }
     };
 
-    const adWatched = isAdWatchedToday();
+    const adTasks = (settings?.adTasks || []) as AdTask[];
 
     return (
-      <div className="p-5 flex flex-col gap-4 pb-20 overflow-y-auto max-h-screen">
-        <h2 className="text-2xl font-bold text-white tracking-tight italic">Tasks & Rewards</h2>
-        <div className="grid gap-3">
-          {/* Ad Task (Managed by Settings) */}
-          {(!settings || settings.adsEnabled !== false) && (
-            <div className={`bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group ${adWatched ? 'opacity-40' : ''}`}>
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center text-accent-gold">
-                  <PlayCircle size={24} />
-                </div>
-                <div>
-                  <h4 className="text-white font-bold text-sm leading-tight mb-1">Watch Video Ad</h4>
-                  <div className="flex items-center gap-1.5 text-accent-gold text-xs font-black italic">
-                     +{(settings?.adReward || 10000).toLocaleString()} <Coins size={12} />
-                  </div>
-                </div>
-              </div>
-              <button 
-                disabled={adWatched || adCooldown > 0}
-                onClick={() => watchAd('ad_reward')}
-                className={`${adWatched ? 'bg-gray-700 text-gray-400' : 'bg-accent-gold text-black'} px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:scale-100`}
-              >
-                {adWatched ? 'Daily Done' : adCooldown > 0 ? `${adCooldown}s` : 'Watch'}
-              </button>
+      <div className="p-5 flex flex-col gap-8 pb-24 overflow-y-auto max-h-screen">
+        {/* Ads Section */}
+        {settings?.adsEnabled && adTasks.length > 0 && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2 mb-1">
+              <PlayCircle className="text-accent-gold" size={20} />
+              <h2 className="text-xl font-black text-white tracking-tight uppercase italic">Monetization</h2>
             </div>
-          )}
-
-          {TASKS.filter(t => t.type !== 'ads').map((task) => {
-            const isCompleted = user?.completedTasks.includes(task.id);
-            return (
-              <div key={task.id} className={`bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group ${isCompleted ? 'opacity-40' : ''}`}>
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center text-accent-gold">
-                    <Users size={24} />
+            <div className="grid gap-3">
+              {adTasks.map((task) => {
+                const adWatched = isAdWatchedToday(task.id);
+                return (
+                  <div key={task.id} className={`bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group ${adWatched ? 'opacity-40' : ''}`}>
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center text-accent-gold">
+                        <PlayCircle size={24} />
+                      </div>
+                      <div>
+                        <h4 className="text-white font-bold text-sm leading-tight mb-1">{task.title}</h4>
+                        <div className="flex items-center gap-1.5 text-accent-gold text-xs font-black italic">
+                           +{task.reward.toLocaleString()} <Coins size={12} />
+                        </div>
+                      </div>
+                    </div>
+                    <button 
+                      disabled={adWatched || adCooldown > 0}
+                      onClick={() => watchAd(task)}
+                      className={`${adWatched ? 'bg-gray-700 text-gray-400' : 'bg-accent-gold text-black'} px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:scale-100 min-w-[100px]`}
+                    >
+                      {adWatched ? 'Daily Done' : adCooldown > 0 ? `${adCooldown}s` : 'Watch'}
+                    </button>
                   </div>
-                  <div>
-                    <h4 className="text-white font-bold text-sm leading-tight mb-1">{task.title}</h4>
-                    <div className="flex items-center gap-1.5 text-accent-gold text-xs font-black italic">
-                       +{task.reward.toLocaleString()} <Coins size={12} />
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Regular Tasks Section */}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Users className="text-accent-gold" size={20} />
+            <h2 className="text-xl font-black text-white tracking-tight uppercase italic">Social Tasks</h2>
+          </div>
+          <div className="grid gap-3">
+            {TASKS.filter(t => t.type !== 'ads').map((task) => {
+              const isCompleted = user?.completedTasks.includes(task.id);
+              return (
+                <div key={task.id} className={`bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group ${isCompleted ? 'opacity-40' : ''}`}>
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center text-accent-gold">
+                      <Users size={24} />
+                    </div>
+                    <div>
+                      <h4 className="text-white font-bold text-sm leading-tight mb-1">{task.title}</h4>
+                      <div className="flex items-center gap-1.5 text-accent-gold text-xs font-black italic">
+                         +{task.reward.toLocaleString()} <Coins size={12} />
+                      </div>
                     </div>
                   </div>
+                  <button 
+                    disabled={isCompleted}
+                    onClick={() => window.open(task.link, '_blank')}
+                    className={`${isCompleted ? 'bg-gray-700 text-gray-400' : 'bg-accent-gold text-black'} px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:scale-100 min-w-[100px]`}
+                  >
+                    {isCompleted ? 'Completed' : 'Start Task'}
+                  </button>
                 </div>
-                <button 
-                  disabled={isCompleted}
-                  onClick={() => window.open(task.link, '_blank')}
-                  className={`${isCompleted ? 'bg-gray-700 text-gray-400' : 'bg-accent-gold text-black'} px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:scale-100`}
-                >
-                  {isCompleted ? 'Done' : 'Start'}
-                </button>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     );

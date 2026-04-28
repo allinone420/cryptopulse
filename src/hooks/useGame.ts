@@ -63,7 +63,7 @@ export const useGame = (activeTab?: string) => {
             refereeReward: REFERRAL_REWARD_REFEREE,
             passiveCommission: 10,
             adsEnabled: true,
-            adReward: 10000
+            adTasks: []
           });
         }
       } catch (err: any) {
@@ -79,7 +79,7 @@ export const useGame = (activeTab?: string) => {
           refereeReward: REFERRAL_REWARD_REFEREE,
           passiveCommission: 10,
           adsEnabled: true,
-          adReward: 10000
+          adTasks: []
         });
       }
     };
@@ -167,6 +167,7 @@ export const useGame = (activeTab?: string) => {
               completedTasks: [],
               lastDailyReward: null,
               lastAdView: null,
+              adCompletions: {},
               dailyStreak: 0,
               level: 1
             };
@@ -330,6 +331,7 @@ export const useGame = (activeTab?: string) => {
             lastPassiveIncomeUpdate: user.lastPassiveIncomeUpdate,
             lastDailyReward: user.lastDailyReward,
             lastAdView: user.lastAdView || null,
+            adCompletions: user.adCompletions || {},
             dailyStreak: user.dailyStreak,
             lastActive: Date.now()
           }),

@@ -30,8 +30,27 @@ export default function AdminPanel() {
   const [refereeReward, setRefereeReward] = useState(2500);
   const [passiveCommission, setPassiveCommission] = useState(10);
   const [adsEnabled, setAdsEnabled] = useState(true);
-  const [adReward, setAdReward] = useState(10000);
+  const [adTasks, setAdTasks] = useState<any[]>([]); // Array of {id, title, reward}
   const [savingSettings, setSavingSettings] = useState(false);
+
+  const [newAdTitle, setNewAdTitle] = useState('');
+  const [newAdReward, setNewAdReward] = useState(10000);
+
+  const addAdTask = () => {
+    if (!newAdTitle.trim()) return;
+    const newTask = {
+      id: 'ad_' + Date.now(),
+      title: newAdTitle.trim(),
+      reward: newAdReward,
+    };
+    setAdTasks([...adTasks, newTask]);
+    setNewAdTitle('');
+    setNewAdReward(10000);
+  };
+
+  const removeAdTask = (id: string) => {
+    setAdTasks(adTasks.filter(t => t.id !== id));
+  };
 
   const ADMIN_EMAILS = ["md.khotiborrahman@gmail.com"];
   const ADMIN_UIDS = ["exJ8T8grBxVQPmIdQXJu5259dFl2"];
@@ -99,7 +118,7 @@ export default function AdminPanel() {
         refereeReward,
         passiveCommission,
         adsEnabled,
-        adReward,
+        adTasks,
         updatedAt: serverTimestamp(),
         updatedBy: adminUser?.email || 'Admin'
       }, { merge: true });
@@ -185,7 +204,7 @@ export default function AdminPanel() {
         setRefereeReward(data.refereeReward || 2500);
         setPassiveCommission(data.passiveCommission || 10);
         setAdsEnabled(data.adsEnabled !== undefined ? data.adsEnabled : true);
-        setAdReward(data.adReward || 10000);
+        setAdTasks(data.adTasks || []);
       }
       const coll = collection(db, 'users');
       let countSnapshot;
@@ -455,15 +474,61 @@ export default function AdminPanel() {
                     </button>
                   </div>
 
-                  <div className="flex flex-col gap-2">
-                    <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Ad Reward (Coins per view)</label>
-                    <input 
-                      type="number" 
-                      value={adReward}
-                      onChange={(e) => setAdReward(Number(e.target.value))}
-                      className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold"
-                    />
-                    <p className="text-[10px] text-text-secondary italic ml-1">Coins awarded to users for watching a rewarded ad (max 1 per day).</p>
+                  <div className="flex flex-col gap-4">
+                    <p className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Manage Reward Ads</p>
+                    
+                    {/* Ad List */}
+                    <div className="flex flex-col gap-2">
+                      {adTasks.map((task) => (
+                        <div key={task.id} className="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-white/5">
+                          <div>
+                            <p className="font-bold text-sm tracking-tight">{task.title}</p>
+                            <p className="text-[10px] text-accent-gold font-black italic">+{task.reward.toLocaleString()} Coins</p>
+                          </div>
+                          <button 
+                            onClick={() => removeAdTask(task.id)}
+                            className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
+                      {adTasks.length === 0 && (
+                        <p className="text-center py-4 text-xs text-text-secondary italic bg-white/5 rounded-xl border border-dashed border-white/10">
+                          No custom ads defined. Users won't see any ads.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Add New Ad */}
+                    <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col gap-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-accent-gold">Add New Ad Slot</p>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] uppercase font-medium text-text-secondary ml-1">Ad Title</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. Watch Video for 10k"
+                          value={newAdTitle}
+                          onChange={(e) => setNewAdTitle(e.target.value)}
+                          className="bg-black/40 border border-white/10 p-3 rounded-xl text-xs font-bold outline-none focus:border-accent-gold"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] uppercase font-medium text-text-secondary ml-1">Reward Amount</label>
+                        <input 
+                          type="number" 
+                          value={newAdReward}
+                          onChange={(e) => setNewAdReward(Number(e.target.value))}
+                          className="bg-black/40 border border-white/10 p-3 rounded-xl text-xs font-bold outline-none focus:border-accent-gold"
+                        />
+                      </div>
+                      <button 
+                        onClick={addAdTask}
+                        className="bg-white/10 hover:bg-accent-gold hover:text-black py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                      >
+                        Add Ad Slot
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
