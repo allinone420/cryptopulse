@@ -484,9 +484,9 @@ export default function App() {
       <div className="flex-1 flex flex-col items-center justify-center pt-4">
         <div className="text-center mb-8">
           <div className="text-sm text-text-secondary uppercase tracking-widest mb-1.5 font-medium">Total Balance</div>
-          <h1 className="text-[42px] font-bold flex items-center justify-center gap-2.5 leading-none">
-            <div className="w-10 h-10 bg-accent-gold rounded-full coin-icon-shadow border-2 border-white/20 flex items-center justify-center text-black/60 text-xl font-black shadow-[inset_0_2px_4px_rgba(255,255,255,0.4),0_0_15px_rgba(243,186,47,0.3)]">S</div>
-            <motion.span>{roundedCoins}</motion.span>
+          <h1 className="text-[44px] font-black flex items-center justify-center gap-3 leading-none tracking-tight">
+            <div className="w-11 h-11 bg-accent-gold rounded-full coin-icon-shadow border-2 border-white/30 flex items-center justify-center text-black/70 text-2xl font-black shadow-[inset_0_2px_6px_rgba(255,255,255,0.5),0_0_20px_rgba(243,186,47,0.4)]">S</div>
+            <motion.span className="text-white drop-shadow-[0_0_10px_rgba(243,186,47,0.2)]">{roundedCoins}</motion.span>
           </h1>
         </div>
 
