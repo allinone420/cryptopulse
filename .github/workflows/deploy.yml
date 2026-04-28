@@ -7,12 +7,13 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
-  build-and-deploy-gh-pages:
+  deploy:
     runs-on: ubuntu-latest
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}-gh-pages
+      group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - name: Checkout 🛎️
@@ -31,35 +32,8 @@ jobs:
         env:
           VITE_PROJECT_ID: ${{ secrets.VITE_PROJECT_ID }}
 
-      - name: Deploy to GH Pages 🚀
+      - name: Deploy to GitHub Pages 🚀
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: dist
           branch: gh-pages
-
-  deploy-firebase:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout 🛎️
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install and Build 🔧
-        run: |
-          npm install
-          npm run build
-        env:
-          VITE_PROJECT_ID: ${{ secrets.VITE_PROJECT_ID }}
-
-      - name: Deploy to Firebase 🚀
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-          channelId: live
-          projectId: ${{ secrets.VITE_PROJECT_ID }}
