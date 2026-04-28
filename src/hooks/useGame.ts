@@ -61,7 +61,9 @@ export const useGame = (activeTab?: string) => {
           setSettings({
             referrerReward: REFERRAL_REWARD_REFERRER,
             refereeReward: REFERRAL_REWARD_REFEREE,
-            passiveCommission: 10
+            passiveCommission: 10,
+            adsEnabled: true,
+            adReward: 10000
           });
         }
       } catch (err: any) {
@@ -75,7 +77,9 @@ export const useGame = (activeTab?: string) => {
         setSettings({
           referrerReward: REFERRAL_REWARD_REFERRER,
           refereeReward: REFERRAL_REWARD_REFEREE,
-          passiveCommission: 10
+          passiveCommission: 10,
+          adsEnabled: true,
+          adReward: 10000
         });
       }
     };
@@ -162,6 +166,7 @@ export const useGame = (activeTab?: string) => {
               referralCount: 0,
               completedTasks: [],
               lastDailyReward: null,
+              lastAdView: null,
               dailyStreak: 0,
               level: 1
             };
@@ -324,6 +329,7 @@ export const useGame = (activeTab?: string) => {
             lastEnergyUpdate: user.lastEnergyUpdate,
             lastPassiveIncomeUpdate: user.lastPassiveIncomeUpdate,
             lastDailyReward: user.lastDailyReward,
+            lastAdView: user.lastAdView || null,
             dailyStreak: user.dailyStreak,
             lastActive: Date.now()
           }),

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>SatoCryp</title>
     <script>
-      // Aggressive Silencing and Polyfill for Telegram CloudStorage
+      // Aggressive Silencing and Polyfill for Telegram WebApp SDK
       (function() {
         var originalLog = console.log;
         var originalWarn = console.warn;
@@ -13,8 +13,22 @@
 
         var silence = function(original, args) {
           try {
-            var message = Array.prototype.slice.call(args).join(' ');
-            if (message.indexOf('CloudStorage') !== -1 || message.indexOf('Telegram.WebApp') !== -1) return;
+            var message = "";
+            for (var i = 0; i < args.length; i++) {
+              var arg = args[i];
+              if (typeof arg === 'string') message += arg + " ";
+              else if (arg && arg.message) message += arg.message + " ";
+              else {
+                try { message += JSON.stringify(arg) + " "; } catch(e) {}
+              }
+            }
+            // Block anything related to Telegram WebApp 6.0 warnings or CloudStorage missing errors
+            if (message.indexOf('CloudStorage') !== -1 || 
+                message.indexOf('Telegram.WebApp') !== -1 ||
+                message.indexOf('version 6.0') !== -1 ||
+                message.indexOf('deprecated') !== -1) {
+              return;
+            }
           } catch (e) {}
           return original.apply(console, args);
         };
@@ -23,7 +37,7 @@
         console.warn = function() { silence(originalWarn, arguments); };
         console.error = function() { silence(originalError, arguments); };
 
-        // Pre-define Telegram WebApp to bypass version checks
+        // Define the robust mock
         var mockCloudStorage = {
           setItem: function(k, v, cb) { localStorage.setItem('_tg_'+k, v); if(cb)cb(null,true); return Promise.resolve(true); },
           getItem: function(k, cb) { var v = localStorage.getItem('_tg_'+k); if(cb)cb(null,v); return Promise.resolve(v); },
@@ -33,23 +47,82 @@
           getKeys: function(cb) { var ks=Object.keys(localStorage).filter(function(k){return k.indexOf('_tg_')===0;}).map(function(k){return k.replace('_tg_','');}); if(cb)cb(null,ks); return Promise.resolve(ks); }
         };
 
-        if (!window.Telegram) window.Telegram = {};
-        if (!window.Telegram.WebApp) window.Telegram.WebApp = {};
-        
-        var wa = window.Telegram.WebApp;
-        wa.version = '6.9';
-        wa.CloudStorage = mockCloudStorage;
+        var webAppMock = {
+          initData: "user=%7B%22id%22%3A123%2C%22first_name%22%3A%22Preview%22%2C%22last_name%22%3A%22User%22%2C%22username%22%3A%22previewuser%22%2C%22language_code%22%3A%22en%22%7D&hash=mockhash",
+          initDataUnsafe: { user: { id: 123, first_name: "Preview", last_name: "User", username: "previewuser" } },
+          version: "7.0",
+          platform: "unknown",
+          colorScheme: "dark",
+          themeParams: { bg_color: "#0a0b0d", text_color: "#ffffff", hint_color: "#707579", link_color: "#2481cc", button_color: "#2481cc", button_text_color: "#ffffff" },
+          isExpanded: true,
+          viewportHeight: 600,
+          viewportStableHeight: 600,
+          headerColor: "#000000",
+          backgroundColor: "#000000",
+          isClosingConfirmationEnabled: false,
+          BackButton: { isVisible: false, onClick: function(){}, offClick: function(){}, show: function(){}, hide: function(){} },
+          MainButton: { text: "CONTINUE", color: "#2481cc", textColor: "#ffffff", isVisible: false, isActive: true, isProgressVisible: false, onClick: function(){}, offClick: function(){}, show: function(){}, hide: function(){}, enable: function(){}, disable: function(){}, showProgress: function(){}, hideProgress: function(){}, setText: function(){}, setParams: function(){} },
+          HapticFeedback: { impactOccurred: function(){}, notificationOccurred: function(){}, selectionChanged: function(){} },
+          CloudStorage: mockCloudStorage,
+          ready: function(){},
+          expand: function(){},
+          close: function(){},
+          showAlert: function(s, cb){ alert(s); if(cb)cb(); },
+          showConfirm: function(s, cb){ var r = confirm(s); if(cb)cb(r); },
+          showScanQrPopup: function(p, cb){ if(cb)cb("MOCKED_QR"); },
+          closeScanQrPopup: function(){},
+          readTextFromClipboard: function(cb){ if(cb)cb("MOCKED_CLIPBOARD"); },
+          requestWriteAccess: function(cb){ if(cb)cb(true); },
+          requestContact: function(cb){ if(cb)cb(true); },
+          switchInlineQuery: function(){},
+          openLink: function(l){ window.open(l, '_blank'); },
+          openTelegramLink: function(l){ window.open(l, '_blank'); },
+          openInvoice: function(i, cb){ if(cb)cb("paid"); },
+          setHeaderColor: function(){},
+          setBackgroundColor: function(){},
+          enableClosingConfirmation: function(){},
+          disableClosingConfirmation: function(){},
+          onEvent: function(){},
+          offEvent: function(){},
+          sendData: function(){}
+        };
+
+        // Ensure window.Telegram.WebApp is sticky
+        if (!window.Telegram) {
+          Object.defineProperty(window, 'Telegram', {
+            value: { WebApp: webAppMock },
+            writable: true,
+            configurable: true
+          });
+        } else if (!window.Telegram.WebApp) {
+          window.Telegram.WebApp = webAppMock;
+        }
+
+        window.addEventListener('error', function(e) {
+          if (e.message && (e.message.indexOf('CloudStorage') !== -1 || e.message.indexOf('Telegram.WebApp') !== -1)) {
+            e.preventDefault();
+            return true;
+          }
+        }, true);
 
         function doPolyfill() {
           try {
             var twa = window.Telegram ? window.Telegram.WebApp : null;
             if (twa) {
-              if (twa.version !== '6.9') {
-                try {
-                  Object.defineProperty(twa, 'version', { value: '6.9', writable: true, configurable: true });
-                } catch(e) { twa.version = '6.9'; }
-              }
-              if (!twa.CloudStorage) twa.CloudStorage = mockCloudStorage;
+               // Enforce version 7.0 and CloudStorage mock
+               if (twa.version !== '7.0') {
+                 try {
+                   Object.defineProperty(twa, 'version', { value: '7.0', writable: true, configurable: true });
+                 } catch(e) { twa.version = '7.0'; }
+               }
+               if (!twa.CloudStorage) {
+                 try {
+                   Object.defineProperty(twa, 'CloudStorage', { value: mockCloudStorage, writable: true, configurable: true });
+                 } catch(e) { twa.CloudStorage = mockCloudStorage; }
+               }
+               // Also polyfill any missing essential methods
+               if (!twa.ready) twa.ready = function(){};
+               if (!twa.expand) twa.expand = function(){};
             }
           } catch(e) {}
         }

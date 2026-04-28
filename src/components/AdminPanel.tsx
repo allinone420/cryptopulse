@@ -4,7 +4,7 @@ import { collection, getDocs, query, orderBy, deleteDoc, doc, where, Timestamp, 
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from 'firebase/auth';
 import { UserData } from '../types/game';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, BarChart3, List, Trash2, X, Menu, Search, LogOut, ChevronRight, Calendar, Lock, Mail, Zap, Wallet, Settings, Check } from 'lucide-react';
+import { Users, BarChart3, List, Trash2, X, Menu, Search, LogOut, ChevronRight, Calendar, Lock, Mail, Zap, Wallet, Settings, Check, PlayCircle } from 'lucide-react';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 
@@ -29,6 +29,8 @@ export default function AdminPanel() {
   const [referrerReward, setReferrerReward] = useState(5000);
   const [refereeReward, setRefereeReward] = useState(2500);
   const [passiveCommission, setPassiveCommission] = useState(10);
+  const [adsEnabled, setAdsEnabled] = useState(true);
+  const [adReward, setAdReward] = useState(10000);
   const [savingSettings, setSavingSettings] = useState(false);
 
   const ADMIN_EMAILS = ["md.khotiborrahman@gmail.com"];
@@ -96,6 +98,8 @@ export default function AdminPanel() {
         referrerReward,
         refereeReward,
         passiveCommission,
+        adsEnabled,
+        adReward,
         updatedAt: serverTimestamp(),
         updatedBy: adminUser?.email || 'Admin'
       }, { merge: true });
@@ -180,6 +184,8 @@ export default function AdminPanel() {
         setReferrerReward(data.referrerReward || 5000);
         setRefereeReward(data.refereeReward || 2500);
         setPassiveCommission(data.passiveCommission || 10);
+        setAdsEnabled(data.adsEnabled !== undefined ? data.adsEnabled : true);
+        setAdReward(data.adReward || 10000);
       }
       const coll = collection(db, 'users');
       let countSnapshot;
@@ -426,6 +432,39 @@ export default function AdminPanel() {
                     <span className="w-16 text-center font-bold text-xl">{passiveCommission}%</span>
                   </div>
                   <p className="text-[10px] text-text-secondary italic ml-1">Percentage of passive income collected by users that is awarded as a bonus to their referrer.</p>
+                </div>
+              </div>
+
+              <div className="bg-card-bg p-8 rounded-3xl border border-white/10 shadow-xl flex flex-col gap-6">
+                <div className="flex items-center gap-3 text-accent-gold mb-2">
+                  <PlayCircle size={20} />
+                  <h3 className="font-black uppercase tracking-widest text-sm">Ads Configuration</h3>
+                </div>
+                
+                <div className="flex flex-col gap-6">
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                    <div>
+                      <p className="font-bold text-white uppercase text-xs tracking-wider">Enable Video Ads</p>
+                      <p className="text-[10px] text-text-secondary italic">Toggle monetization visibility for users.</p>
+                    </div>
+                    <button 
+                      onClick={() => setAdsEnabled(!adsEnabled)}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${adsEnabled ? 'bg-green-500' : 'bg-white/20'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${adsEnabled ? 'right-1' : 'left-1'}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Ad Reward (Coins per view)</label>
+                    <input 
+                      type="number" 
+                      value={adReward}
+                      onChange={(e) => setAdReward(Number(e.target.value))}
+                      className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold"
+                    />
+                    <p className="text-[10px] text-text-secondary italic ml-1">Coins awarded to users for watching a rewarded ad (max 1 per day).</p>
+                  </div>
                 </div>
               </div>
 

@@ -16,6 +16,7 @@ export interface UserData {
   referralCount: number;
   completedTasks: string[];
   lastDailyReward: number | null; // timestamp
+  lastAdView?: number | null; // timestamp
   dailyStreak: number;
   level: number;
   lastActive?: number;

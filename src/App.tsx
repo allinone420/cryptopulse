@@ -13,7 +13,7 @@ import AdminPanel from './components/AdminPanel';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
-  const { user, loading, syncing, tap, levelUp, setUser, myReferrals } = useGame(activeTab);
+  const { user, loading, syncing, tap, levelUp, setUser, settings, myReferrals } = useGame(activeTab);
 
   useEffect(() => {
     // Other initializations can go here
@@ -233,14 +233,32 @@ export default function App() {
 
 
   const watchAd = (taskId: string) => {
+    if (!user || (settings && !settings.adsEnabled)) return;
+    
+    // Check daily limit
+    if (user.lastAdView) {
+      try {
+        const last = new Date(user.lastAdView);
+        const now = new Date();
+        const lastDateStr = last.toISOString().split('T')[0];
+        const nowDateStr = now.toISOString().split('T')[0];
+        
+        if (lastDateStr === nowDateStr) {
+          alert("You have already reached your daily ad limit. Come back tomorrow!");
+          return;
+        }
+      } catch (e) {
+        // Fallback or ignore
+      }
+    }
+
     if (adCooldown > 0) return;
     if (typeof (window as any).show_10932949 !== 'function') {
       alert("Ads SDK is loading, please try again in a moment.");
       return;
     }
     
-    const task = TASKS.find(t => t.id === taskId);
-    if (!task) return;
+    const rewardAmount = settings?.adReward || 10000;
 
     // Safety timeout for ad call to prevent "adex timeout" hanging
     const adPromise = taskId === 'ad_popup' ? (window as any).show_10932949('pop') : (window as any).show_10932949();
@@ -252,12 +270,26 @@ export default function App() {
 
     Promise.race([adPromise, timeoutPromise]).then(() => {
       // Reward user
-      setUser(prev => prev ? ({
-        ...prev,
-        coins: prev.coins + task.reward,
-        totalCoins: prev.totalCoins + task.reward,
-        completedTasks: [...prev.completedTasks, taskId]
-      }) : null);
+      const updatedUser = {
+        ...user,
+        coins: user.coins + rewardAmount,
+        totalCoins: user.totalCoins + rewardAmount,
+        lastAdView: Date.now()
+      };
+      
+      setUser(updatedUser);
+      
+      // Persist immediately
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        updateDoc(userRef, {
+          coins: Math.floor(updatedUser.coins),
+          totalCoins: Math.floor(updatedUser.totalCoins),
+          lastAdView: updatedUser.lastAdView
+        });
+      } catch (err) {
+        console.error("Failed to save ad reward:", err);
+      }
       
       confetti({
         particleCount: 100,
@@ -268,8 +300,8 @@ export default function App() {
 
       WebApp.HapticFeedback.notificationOccurred('success');
       
-      // Still set a small cooldown to prevent spamming
-      setAdCooldown(10);
+      // Still set a small cooldown to prevent accidental double clicks
+      setAdCooldown(5);
       const adTimer = setInterval(() => {
         setAdCooldown(prev => {
           if (prev <= 1) {
@@ -397,38 +429,80 @@ export default function App() {
     </div>
   );
 
-  const renderTasks = () => (
-    <div className="p-5 flex flex-col gap-4 pb-20 overflow-y-auto max-h-screen">
-      <h2 className="text-2xl font-bold text-white tracking-tight italic">Tasks & Rewards</h2>
-      <div className="grid gap-3">
-        {TASKS.map((task) => {
-          const isCompleted = user?.completedTasks.includes(task.id);
-          return (
-            <div key={task.id} className={`bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group ${isCompleted ? 'opacity-40' : ''}`}>
+  const renderTasks = () => {
+    const isAdWatchedToday = () => {
+      if (!user?.lastAdView) return false;
+      try {
+        const last = new Date(user.lastAdView);
+        const now = new Date();
+        // Use ISO date string (YYYY-MM-DD) for reliable same-day check
+        const lastDateStr = last.toISOString().split('T')[0];
+        const nowDateStr = now.toISOString().split('T')[0];
+        return lastDateStr === nowDateStr;
+      } catch (e) {
+        return false;
+      }
+    };
+
+    const adWatched = isAdWatchedToday();
+
+    return (
+      <div className="p-5 flex flex-col gap-4 pb-20 overflow-y-auto max-h-screen">
+        <h2 className="text-2xl font-bold text-white tracking-tight italic">Tasks & Rewards</h2>
+        <div className="grid gap-3">
+          {/* Ad Task (Managed by Settings) */}
+          {(!settings || settings.adsEnabled !== false) && (
+            <div className={`bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group ${adWatched ? 'opacity-40' : ''}`}>
               <div className="flex items-center gap-3.5">
                 <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center text-accent-gold">
-                  {task.type === 'telegram' ? <Users size={24} /> : <PlayCircle size={24} />}
+                  <PlayCircle size={24} />
                 </div>
                 <div>
-                  <h4 className="text-white font-bold text-sm leading-tight mb-1">{task.title}</h4>
+                  <h4 className="text-white font-bold text-sm leading-tight mb-1">Watch Video Ad</h4>
                   <div className="flex items-center gap-1.5 text-accent-gold text-xs font-black italic">
-                     +{task.reward.toLocaleString()} <Coins size={12} />
+                     +{(settings?.adReward || 10000).toLocaleString()} <Coins size={12} />
                   </div>
                 </div>
               </div>
               <button 
-                disabled={isCompleted || (task.type === 'ads' && adCooldown > 0)}
-                onClick={() => task.type === 'ads' ? watchAd(task.id) : window.open(task.link, '_blank')}
-                className={`${isCompleted ? 'bg-gray-700 text-gray-400' : 'bg-accent-gold text-black'} px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:scale-100`}
+                disabled={adWatched || adCooldown > 0}
+                onClick={() => watchAd('ad_reward')}
+                className={`${adWatched ? 'bg-gray-700 text-gray-400' : 'bg-accent-gold text-black'} px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:scale-100`}
               >
-                {isCompleted ? 'Done' : task.type === 'ads' && adCooldown > 0 ? `${adCooldown}s` : 'Start'}
+                {adWatched ? 'Daily Done' : adCooldown > 0 ? `${adCooldown}s` : 'Watch'}
               </button>
             </div>
-          );
-        })}
+          )}
+
+          {TASKS.filter(t => t.type !== 'ads').map((task) => {
+            const isCompleted = user?.completedTasks.includes(task.id);
+            return (
+              <div key={task.id} className={`bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group ${isCompleted ? 'opacity-40' : ''}`}>
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center text-accent-gold">
+                    <Users size={24} />
+                  </div>
+                  <div>
+                    <h4 className="text-white font-bold text-sm leading-tight mb-1">{task.title}</h4>
+                    <div className="flex items-center gap-1.5 text-accent-gold text-xs font-black italic">
+                       +{task.reward.toLocaleString()} <Coins size={12} />
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  disabled={isCompleted}
+                  onClick={() => window.open(task.link, '_blank')}
+                  className={`${isCompleted ? 'bg-gray-700 text-gray-400' : 'bg-accent-gold text-black'} px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:scale-100`}
+                >
+                  {isCompleted ? 'Done' : 'Start'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const generateInviteLink = () => {
     return `https://t.me/${BOT_USERNAME}?startapp=ref_${user?.uid}`;
