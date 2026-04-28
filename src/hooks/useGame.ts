@@ -5,7 +5,7 @@ import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, increment, getDocFromServer, query, collection, orderBy, limit, getDocs, where } from 'firebase/firestore';
 import { initTelegram, hapticFeedback } from '../lib/telegram';
 import { UserData } from '../types/game';
-import { INITIAL_ENERGY, ENERGY_REFILL_RATE, LEVELS, REFERRAL_REWARD_REFERRER, REFERRAL_REWARD_REFEREE, MINE_CARDS } from '../lib/constants';
+import { INITIAL_ENERGY, ENERGY_REFILL_RATE, LEVELS, REFERRAL_REWARD_REFERRER, REFERRAL_REWARD_REFEREE, MINE_CARDS, MAX_CARD_LEVEL } from '../lib/constants';
 import { useTonAddress, useTonWallet } from '@tonconnect/ui-react';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 
@@ -16,7 +16,11 @@ const calculatePassiveRate = (level: number, mineCards: { [id: string]: number }
   Object.entries(mineCards).forEach(([id, cardLevel]) => {
     const card = MINE_CARDS.find(c => c.id === id);
     if (card) {
-      cardIncomePerHour += card.baseProfit * cardLevel;
+      // Natural scaling: slow start, balanced end
+      // formula: base * level * (1 + 0.03*(level-1) + 0.004*(level-1)^2)
+      const l = cardLevel;
+      const scalingBonus = 1 + (l - 1) * 0.03 + Math.pow(l - 1, 2) * 0.004;
+      cardIncomePerHour += Math.floor(card.baseProfit * l * scalingBonus);
     }
   });
   
@@ -514,6 +518,8 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     if (!card) return;
 
     const currentLevel = user.mineCards?.[cardId] || 0;
+    if (currentLevel >= MAX_CARD_LEVEL) return;
+
     const upgradeCost = Math.floor(card.baseCost * Math.pow(1.5, currentLevel));
     
     if (user.coins >= upgradeCost) {

@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, anima
 import { useGame } from './hooks/useGame';
 import { Navigation, Header } from './components/Navigation';
 import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCircle, Copy, Check, X, Pickaxe, Info, TrendingUp, Clock } from 'lucide-react';
-import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAME, LEVELS, MINE_CARDS, MineCard } from './lib/constants';
+import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAME, LEVELS, MINE_CARDS, MineCard, MAX_CARD_LEVEL } from './lib/constants';
 import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
@@ -812,9 +812,21 @@ export default function App() {
           <div className="grid grid-cols-2 gap-3 mt-3">
             {MINE_CARDS.filter(c => c.category === mineCategory).map(card => {
               const level = user?.mineCards?.[card.id] || 0;
+              const isMaxLevel = level >= MAX_CARD_LEVEL;
               const upgradeCost = Math.floor(card.baseCost * Math.pow(1.5, level));
-              const profitIncrease = card.baseProfit;
-              const canAfford = (user?.coins || 0) >= upgradeCost;
+              
+              // Calculate current profit and next level profit for display
+              const calculateCardProfit = (l: number) => {
+                  if (l === 0) return 0;
+                  const scalingBonus = 1 + (l - 1) * 0.03 + Math.pow(l - 1, 2) * 0.004;
+                  return Math.floor(card.baseProfit * l * scalingBonus);
+              };
+              
+              const currentProfit = calculateCardProfit(level);
+              const nextLevelProfit = calculateCardProfit(level + 1);
+              const profitIncrease = nextLevelProfit - currentProfit;
+              
+              const canAfford = (user?.coins || 0) >= upgradeCost && !isMaxLevel;
 
               return (
                 <div 
@@ -823,13 +835,13 @@ export default function App() {
                   onClick={() => {
                       if (canAfford) buyCard(card.id);
                   }}
-                  className="bg-[#151515] rounded-[24px] border border-white/5 p-4 flex flex-col gap-3 relative overflow-hidden shadow-md active:scale-[0.97] transition-all duration-100 select-none touch-manipulation"
+                  className={`bg-[#151515] rounded-[24px] border border-white/5 p-4 flex flex-col gap-3 relative overflow-hidden shadow-md transition-all duration-100 select-none touch-manipulation ${isMaxLevel ? 'opacity-80' : 'active:scale-[0.97]'}`}
                 >
                   <div className="flex items-center justify-between relative z-10">
                     <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-accent-gold">
                       <Pickaxe size={20} />
                     </div>
-                    <div className="text-[8px] font-black text-accent-gold px-2 py-0.5 bg-accent-gold/10 rounded-full border border-accent-gold/20">
+                    <div className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${isMaxLevel ? 'text-text-secondary border-white/10 bg-white/5' : 'text-accent-gold border-accent-gold/20 bg-accent-gold/10'}`}>
                       L{level}
                     </div>
                   </div>
@@ -842,20 +854,30 @@ export default function App() {
                   <div className="pt-2 border-t border-white/5 relative z-10 mt-auto">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[8px] font-bold text-text-secondary uppercase">Profit/h</span>
-                      <span className="text-[9px] font-black text-accent-gold">+{profitIncrease.toLocaleString()}</span>
+                      <span className="text-[9px] font-black text-accent-gold">
+                        {level === 0 ? `+${card.baseProfit}` : `+${profitIncrease.toLocaleString()}`}
+                      </span>
                     </div>
                     
                     <div
                       className={`w-full py-2.5 rounded-[12px] flex items-center justify-center gap-1.5 transition-all ${
-                        canAfford 
-                          ? 'bg-accent-gold text-black font-black text-[10px] shadow-sm' 
-                          : 'bg-white/5 text-text-secondary font-bold text-[10px] opacity-40'
+                        isMaxLevel
+                          ? 'bg-white/5 text-text-secondary font-black text-[10px]'
+                          : canAfford 
+                            ? 'bg-accent-gold text-black font-black text-[10px] shadow-sm' 
+                            : 'bg-white/5 text-text-secondary font-bold text-[10px] opacity-40'
                       }`}
                     >
-                      <Coins size={12} />
-                      <span>
-                        {upgradeCost >= 1000000 ? `${(upgradeCost/1000000).toFixed(1)}M` : upgradeCost >= 1000 ? `${(upgradeCost/1000).toFixed(1)}K` : upgradeCost.toLocaleString()}
-                      </span>
+                      {isMaxLevel ? (
+                        <span className="uppercase tracking-widest">Max Level</span>
+                      ) : (
+                        <>
+                          <Coins size={12} />
+                          <span>
+                            {upgradeCost >= 1000000 ? `${(upgradeCost/1000000).toFixed(1)}M` : upgradeCost >= 1000 ? `${(upgradeCost/1000).toFixed(1)}K` : upgradeCost.toLocaleString()}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
 
