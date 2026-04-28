@@ -30,7 +30,13 @@ export default function AdminPanel() {
   const [refereeReward, setRefereeReward] = useState(2500);
   const [passiveCommission, setPassiveCommission] = useState(10);
   const [adsEnabled, setAdsEnabled] = useState(true);
+  const [interstitialEnabled, setInterstitialEnabled] = useState(false);
+  const [interstitialReward, setInterstitialReward] = useState(5000);
+  const [bannerEnabled, setBannerEnabled] = useState(false);
+  const [bannerReward, setBannerReward] = useState(2000);
   const [adTasks, setAdTasks] = useState<any[]>([]); // Array of {id, title, reward}
+  const [tgBotToken, setTgBotToken] = useState('');
+  const [tgChannelId, setTgChannelId] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
 
   const [newAdTitle, setNewAdTitle] = useState('');
@@ -118,7 +124,13 @@ export default function AdminPanel() {
         refereeReward,
         passiveCommission,
         adsEnabled,
+        interstitialEnabled,
+        interstitialReward,
+        bannerEnabled,
+        bannerReward,
         adTasks,
+        tgBotToken,
+        tgChannelId,
         updatedAt: serverTimestamp(),
         updatedBy: adminUser?.email || 'Admin'
       }, { merge: true });
@@ -204,7 +216,13 @@ export default function AdminPanel() {
         setRefereeReward(data.refereeReward || 2500);
         setPassiveCommission(data.passiveCommission || 10);
         setAdsEnabled(data.adsEnabled !== undefined ? data.adsEnabled : true);
+        setInterstitialEnabled(data.interstitialEnabled || false);
+        setInterstitialReward(data.interstitialReward || 5000);
+        setBannerEnabled(data.bannerEnabled || false);
+        setBannerReward(data.bannerReward || 2000);
         setAdTasks(data.adTasks || []);
+        setTgBotToken(data.tgBotToken || '');
+        setTgChannelId(data.tgChannelId || '');
       }
       const coll = collection(db, 'users');
       let countSnapshot;
@@ -463,8 +481,8 @@ export default function AdminPanel() {
                 <div className="flex flex-col gap-6">
                   <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
                     <div>
-                      <p className="font-bold text-white uppercase text-xs tracking-wider">Enable Video Ads</p>
-                      <p className="text-[10px] text-text-secondary italic">Toggle monetization visibility for users.</p>
+                      <p className="font-bold text-white uppercase text-xs tracking-wider">Enable Reward Video Ads</p>
+                      <p className="text-[10px] text-text-secondary italic">Toggle rewarded video monetization visibility.</p>
                     </div>
                     <button 
                       onClick={() => setAdsEnabled(!adsEnabled)}
@@ -473,6 +491,56 @@ export default function AdminPanel() {
                       <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${adsEnabled ? 'right-1' : 'left-1'}`} />
                     </button>
                   </div>
+
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                    <div>
+                      <p className="font-bold text-white uppercase text-xs tracking-wider">Enable Pop-up (Interstitial) Ads</p>
+                      <p className="text-[10px] text-text-secondary italic">Show pop-up ads during game sessions.</p>
+                    </div>
+                    <button 
+                      onClick={() => setInterstitialEnabled(!interstitialEnabled)}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${interstitialEnabled ? 'bg-yellow-500' : 'bg-white/20'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${interstitialEnabled ? 'right-1' : 'left-1'}`} />
+                    </button>
+                  </div>
+
+                  {interstitialEnabled && (
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Pop-up Reward (Coins)</label>
+                      <input 
+                        type="number" 
+                        value={interstitialReward}
+                        onChange={(e) => setInterstitialReward(Number(e.target.value))}
+                        className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold"
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                    <div>
+                      <p className="font-bold text-white uppercase text-xs tracking-wider">Enable Banner Ads</p>
+                      <p className="text-[10px] text-text-secondary italic">Show static banners in tabs.</p>
+                    </div>
+                    <button 
+                      onClick={() => setBannerEnabled(!bannerEnabled)}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${bannerEnabled ? 'bg-orange-500' : 'bg-white/20'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${bannerEnabled ? 'right-1' : 'left-1'}`} />
+                    </button>
+                  </div>
+
+                  {bannerEnabled && (
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Banner Reward (Coins)</label>
+                      <input 
+                        type="number" 
+                        value={bannerReward}
+                        onChange={(e) => setBannerReward(Number(e.target.value))}
+                        className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold"
+                      />
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-4">
                     <p className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Manage Reward Ads</p>
@@ -529,6 +597,43 @@ export default function AdminPanel() {
                         Add Ad Slot
                       </button>
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-card-bg p-8 rounded-3xl border border-white/10 shadow-xl flex flex-col gap-6">
+                <div className="flex items-center gap-3 text-accent-gold mb-2">
+                  <Users size={20} />
+                  <h3 className="font-black uppercase tracking-widest text-sm">Telegram Verification Config</h3>
+                </div>
+                
+                <div className="flex flex-col gap-6">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Bot API Token</label>
+                    <input 
+                      type="password" 
+                      placeholder="e.g. 123456:ABC-DEF..."
+                      value={tgBotToken}
+                      onChange={(e) => setTgBotToken(e.target.value)}
+                      className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold"
+                    />
+                    <p className="text-[10px] text-text-secondary italic ml-1 tracking-tight leading-relaxed">
+                      Token from <span className="text-accent-gold font-bold">@BotFather</span>. Bot MUST be an admin in your channel.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Channel ID / @Username</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. @SatoCryp"
+                      value={tgChannelId}
+                      onChange={(e) => setTgChannelId(e.target.value)}
+                      className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold"
+                    />
+                    <p className="text-[10px] text-text-secondary italic ml-1 tracking-tight leading-relaxed">
+                      Used to check if user UID is in the subscriber list.
+                    </p>
                   </div>
                 </div>
               </div>

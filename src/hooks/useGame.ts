@@ -63,7 +63,13 @@ export const useGame = (activeTab?: string) => {
             refereeReward: REFERRAL_REWARD_REFEREE,
             passiveCommission: 10,
             adsEnabled: true,
-            adTasks: []
+            interstitialEnabled: false,
+            interstitialReward: 5000,
+            bannerEnabled: false,
+            bannerReward: 2000,
+            adTasks: [],
+            tgBotToken: '',
+            tgChannelId: ''
           });
         }
       } catch (err: any) {
@@ -79,7 +85,13 @@ export const useGame = (activeTab?: string) => {
           refereeReward: REFERRAL_REWARD_REFEREE,
           passiveCommission: 10,
           adsEnabled: true,
-          adTasks: []
+          interstitialEnabled: false,
+          interstitialReward: 5000,
+          bannerEnabled: false,
+          bannerReward: 2000,
+          adTasks: [],
+          tgBotToken: '',
+          tgChannelId: ''
         });
       }
     };

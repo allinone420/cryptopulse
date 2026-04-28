@@ -9,7 +9,13 @@ export interface GlobalSettings {
   refereeReward: number;
   passiveCommission: number;
   adsEnabled: boolean;
+  interstitialEnabled?: boolean;
+  interstitialReward?: number;
+  bannerEnabled?: boolean;
+  bannerReward?: number;
   adTasks?: AdTask[];
+  tgBotToken?: string;
+  tgChannelId?: string;
 }
 
 export interface UserData {

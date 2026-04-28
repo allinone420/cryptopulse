@@ -6,7 +6,7 @@ import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCirc
 import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAME, LEVELS } from './lib/constants';
 import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
-import { collection, query, orderBy, limit, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { LeaderboardEntry, AdTask } from './types/game';
 import AdminPanel from './components/AdminPanel';
@@ -14,10 +14,47 @@ import AdminPanel from './components/AdminPanel';
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const { user, loading, syncing, tap, levelUp, setUser, settings, myReferrals } = useGame(activeTab);
+  const [adCooldown, setAdCooldown] = useState(0);
+  const [verifyingTask, setVerifyingTask] = useState<string | null>(null);
+  const [lastInterstitial, setLastInterstitial] = useState(Date.now());
 
   useEffect(() => {
-    // Other initializations can go here
-  }, []);
+    // Interstitial Ad Logic
+    if (settings?.interstitialEnabled && user) {
+      const interval = setInterval(() => {
+        const now = Date.now();
+        // Show every 5 minutes if active
+        if (now - lastInterstitial > 5 * 60 * 1000) {
+          showInterstitial();
+        }
+      }, 30000); // Check every 30s
+      return () => clearInterval(interval);
+    }
+  }, [settings, user, lastInterstitial]);
+
+  const showInterstitial = () => {
+    if (typeof (window as any).show_10932949 !== 'function') return;
+    
+    (window as any).show_10932949('pop').then(() => {
+      setLastInterstitial(Date.now());
+      const reward = settings?.interstitialReward || 5000;
+      
+      setUser(prev => prev ? ({
+        ...prev,
+        coins: prev.coins + reward,
+        totalCoins: prev.totalCoins + reward
+      }) : null);
+
+      if (user) {
+        updateDoc(doc(db, 'users', user.uid), {
+          coins: increment(reward),
+          totalCoins: increment(reward)
+        });
+      }
+      
+      WebApp.HapticFeedback.notificationOccurred('success');
+    }).catch((e: any) => console.log("Interstitial ad error:", e));
+  };
   
   const checkIsAdmin = () => {
     const url = window.location.href.toLowerCase();
@@ -34,7 +71,6 @@ export default function App() {
   const [taps, setTaps] = useState<{ id: number; x: number; y: number; value: number }[]>([]);
   const [showDaily, setShowDaily] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
-  const [adCooldown, setAdCooldown] = useState(0);
   const [copied, setCopied] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
@@ -96,6 +132,73 @@ export default function App() {
       fetchLeaders();
     }
   }, [activeTab]);
+
+  const verifyTelegramJoin = async (taskId: string, reward: number) => {
+    if (!user) return;
+    setVerifyingTask(taskId);
+    
+    // Default success if no bot token (prevents locking user if admin config is incomplete)
+    let isMember = true; 
+
+    if (settings?.tgBotToken && settings?.tgChannelId) {
+      try {
+        const response = await fetch(`https://api.telegram.org/bot${settings.tgBotToken}/getChatMember?chat_id=${settings.tgChannelId}&user_id=${user.telegramId}`);
+        const data = await response.json();
+        
+        if (data.ok) {
+          const status = data.result.status;
+          isMember = ['member', 'administrator', 'creator'].includes(status);
+        } else {
+          console.error("Telegram API Error:", data.description);
+          // If the bot token is invalid or bot is not in channel, we don't block the user but log it
+          isMember = false;
+        }
+      } catch (err) {
+        console.error("Verification failed:", err);
+        isMember = false;
+      }
+    } else {
+      // If admin hasn't set anything, just let them pass for now
+      isMember = true;
+    }
+
+    if (isMember) {
+      // Check if already completed to prevent double reward
+      if (user.completedTasks.includes(taskId)) {
+        alert("You have already received the reward for this task!");
+        setVerifyingTask(null);
+        return;
+      }
+
+      const updatedUser = {
+        ...user,
+        coins: user.coins + reward,
+        totalCoins: user.totalCoins + reward,
+        completedTasks: [...(user.completedTasks || []), taskId]
+      };
+      setUser(updatedUser);
+      
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          coins: increment(reward),
+          totalCoins: increment(reward),
+          completedTasks: updatedUser.completedTasks
+        });
+      } catch (e) {
+        console.error("Failed to update task completion:", e);
+      }
+
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      WebApp.HapticFeedback.notificationOccurred('success');
+      alert("Verification successful! Reward added.");
+    } else {
+      WebApp.HapticFeedback.notificationOccurred('error');
+      const channelDisplayName = settings?.tgChannelId || "@SatoCryp";
+      alert(`Join failed or not verified. Please join ${channelDisplayName} channel first!`);
+    }
+    
+    setVerifyingTask(null);
+  };
 
   const nextLevel = LEVELS.find(l => l.level === (user?.level || 1) + 1);
   const currentLevelInfo = LEVELS.find(l => l.level === (user?.level || 1)) || LEVELS[0];
@@ -340,6 +443,41 @@ export default function App() {
     }, 700);
   };
 
+  const claimBannerReward = () => {
+    if (!user || !settings?.bannerEnabled) return;
+    
+    // Daily limit for banner
+    const bannerId = 'banner_daily';
+    if (user.adCompletions && user.adCompletions[bannerId]) {
+      const last = new Date(user.adCompletions[bannerId]);
+      const now = new Date();
+      if (last.toISOString().split('T')[0] === now.toISOString().split('T')[0]) {
+        alert("You have already claimed your banner reward today!");
+        return;
+      }
+    }
+
+    const reward = settings.bannerReward || 2000;
+    const now = Date.now();
+    
+    setUser(prev => prev ? ({
+      ...prev,
+      coins: prev.coins + reward,
+      totalCoins: prev.totalCoins + reward,
+      adCompletions: { ...(prev.adCompletions || {}), [bannerId]: now }
+    }) : null);
+
+    updateDoc(doc(db, 'users', user.uid), {
+      coins: increment(reward),
+      totalCoins: increment(reward),
+      adCompletions: { ...(user.adCompletions || {}), [bannerId]: now }
+    });
+
+    confetti({ particleCount: 50, spread: 60, origin: { y: 0.8 } });
+    WebApp.HapticFeedback.notificationOccurred('success');
+    alert(`Reward of ${reward} coins claimed!`);
+  };
+
   const renderHome = () => (
     <div className="flex flex-col gap-6 w-full">
       {/* Stats Grid */}
@@ -426,6 +564,33 @@ export default function App() {
             animate={{ width: `${((user?.energy || 0) / (user?.maxEnergy || 1)) * 100}%` }}
           />
         </div>
+
+        {/* Banner Ad Section */}
+        {settings?.bannerEnabled && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 px-5"
+          >
+            <div className="bg-gradient-to-r from-[#2481cc]/20 to-purple-600/20 border border-white/10 p-4 rounded-3xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#2481cc]/20 rounded-xl flex items-center justify-center text-[#2481cc]">
+                  <PlayCircle size={20} />
+                </div>
+                <div>
+                  <p className="text-white font-bold text-xs">Official Partner</p>
+                  <p className="text-[10px] text-accent-gold font-black uppercase tracking-widest">+{settings.bannerReward?.toLocaleString()} Daily Reward</p>
+                </div>
+              </div>
+              <button 
+                onClick={claimBannerReward}
+                className="bg-[#2481cc] text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all"
+              >
+                Claim
+              </button>
+            </div>
+          </motion.div>
+        )}
       </div>
     </div>
   );
@@ -507,13 +672,24 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                  <button 
-                    disabled={isCompleted}
-                    onClick={() => window.open(task.link, '_blank')}
-                    className={`${isCompleted ? 'bg-gray-700 text-gray-400' : 'bg-accent-gold text-black'} px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:scale-100 min-w-[100px]`}
-                  >
-                    {isCompleted ? 'Completed' : 'Start Task'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      disabled={isCompleted}
+                      onClick={() => window.open(task.link, '_blank')}
+                      className={`${isCompleted ? 'bg-gray-700 text-gray-400' : 'bg-accent-gold text-black'} px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all disabled:scale-100 min-w-[80px]`}
+                    >
+                      {isCompleted ? 'Done' : 'Join'}
+                    </button>
+                    {!isCompleted && task.type === 'telegram' && (
+                      <button 
+                        disabled={verifyingTask === task.id}
+                        onClick={() => verifyTelegramJoin(task.id, task.reward)}
+                        className="bg-white/5 border border-white/10 text-white px-4 py-2 rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-white/10 active:scale-95 transition-all disabled:opacity-50 min-w-[80px] flex items-center justify-center"
+                      >
+                        {verifyingTask === task.id ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Check'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
