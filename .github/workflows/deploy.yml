@@ -9,10 +9,10 @@ permissions:
   contents: write
 
 jobs:
-  build-and-deploy:
+  build-and-deploy-gh-pages:
     runs-on: ubuntu-latest
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+      group: ${{ github.workflow }}-${{ github.ref }}-gh-pages
       cancel-in-progress: true
     steps:
       - name: Checkout 🛎️
@@ -31,8 +31,23 @@ jobs:
         env:
           VITE_PROJECT_ID: ${{ secrets.VITE_PROJECT_ID }}
 
-      - name: Deploy 🚀
+      - name: Deploy to GH Pages 🚀
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: dist # আপনার বিল্ড করা ফাইলের ডিরেক্টরি
-          branch: gh-pages # এই ব্রাঞ্চে আপনার ওয়েবসাইট লাইভ হবে
+          folder: dist
+          branch: gh-pages
+
+  deploy-firebase:
+    runs-on: ubuntu-latest
+    needs: build-and-deploy-gh-pages
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v4
+
+      - name: Deploy to Firebase 🚀
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          channelId: live
+          projectId: ${{ secrets.VITE_PROJECT_ID }}
