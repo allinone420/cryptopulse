@@ -10,11 +10,8 @@ permissions:
   id-token: write
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
     steps:
       - name: Checkout 🛎️
         uses: actions/checkout@v4
@@ -32,7 +29,7 @@ jobs:
         env:
           VITE_PROJECT_ID: ${{ secrets.VITE_PROJECT_ID }}
 
-      - name: Deploy to GitHub Pages 🚀
+      - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: dist
