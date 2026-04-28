@@ -773,12 +773,12 @@ export default function App() {
         <div className="px-5 pt-4 pb-2 flex flex-col gap-4 sticky top-0 bg-black z-20">
           {/* Stats Header */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#1a1a1a] rounded-2xl border border-white/5 p-3 flex flex-col items-center text-center shadow-lg">
+            <div className="bg-[#1a1a1a] rounded-2xl border border-white/5 p-3 flex flex-col items-center text-center shadow-md">
               <TrendingUp size={18} className="text-accent-gold mb-1" />
               <span className="text-[9px] uppercase font-bold text-text-secondary tracking-widest">Profit per hour</span>
               <span className="text-md font-black text-white italic">+{totalProfitPerHour.toLocaleString()}</span>
             </div>
-            <div className="bg-[#1a1a1a] rounded-2xl border border-white/5 p-3 flex flex-col items-center text-center shadow-lg">
+            <div className="bg-[#1a1a1a] rounded-2xl border border-white/5 p-3 flex flex-col items-center text-center shadow-md">
               <Clock size={18} className="text-accent-blue mb-1" />
               <span className="text-[9px] uppercase font-bold text-text-secondary tracking-widest">Offline Limit</span>
               <span className="text-md font-black text-white italic">3 Hours</span>

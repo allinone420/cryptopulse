@@ -21,15 +21,15 @@ export const REFERRAL_REWARD_REFEREE = 2500;
 
 export const LEVELS = [
   { level: 1, name: 'Bronze', upgradeCost: 0, tapValue: 1, maxEnergy: 1000, passiveRate: 1 },
-  { level: 2, name: 'Silver', upgradeCost: 25000, tapValue: 2, maxEnergy: 2500, passiveRate: 5 },
-  { level: 3, name: 'Gold', upgradeCost: 100000, tapValue: 4, maxEnergy: 5000, passiveRate: 15 },
-  { level: 4, name: 'Platinum', upgradeCost: 500000, tapValue: 8, maxEnergy: 10000, passiveRate: 50 },
-  { level: 5, name: 'Diamond', upgradeCost: 2000000, tapValue: 15, maxEnergy: 25000, passiveRate: 150 },
-  { level: 6, name: 'Epic', upgradeCost: 10000000, tapValue: 30, maxEnergy: 60000, passiveRate: 500 },
-  { level: 7, name: 'Legendary', upgradeCost: 50000000, tapValue: 60, maxEnergy: 150000, passiveRate: 1500 },
-  { level: 8, name: 'Master', upgradeCost: 250000000, tapValue: 125, maxEnergy: 400000, passiveRate: 5000 },
-  { level: 9, name: 'Grandmaster', upgradeCost: 1000000000, tapValue: 250, maxEnergy: 1000000, passiveRate: 15000 },
-  { level: 10, name: 'God Mode', upgradeCost: 5000000000, tapValue: 500, maxEnergy: 2500000, passiveRate: 50000 },
+  { level: 2, name: 'Silver', upgradeCost: 30000, tapValue: 2, maxEnergy: 3000, passiveRate: 10 },
+  { level: 3, name: 'Gold', upgradeCost: 150000, tapValue: 5, maxEnergy: 6000, passiveRate: 35 },
+  { level: 4, name: 'Platinum', upgradeCost: 750000, tapValue: 10, maxEnergy: 12000, passiveRate: 120 },
+  { level: 5, name: 'Diamond', upgradeCost: 3000000, tapValue: 20, maxEnergy: 25000, passiveRate: 400 },
+  { level: 6, name: 'Epic', upgradeCost: 15000000, tapValue: 50, maxEnergy: 60000, passiveRate: 1500 },
+  { level: 7, name: 'Legendary', upgradeCost: 75000000, tapValue: 100, maxEnergy: 150000, passiveRate: 5000 },
+  { level: 8, name: 'Master', upgradeCost: 350000000, tapValue: 250, maxEnergy: 400000, passiveRate: 18000 },
+  { level: 9, name: 'Grandmaster', upgradeCost: 1500000000, tapValue: 500, maxEnergy: 1000000, passiveRate: 60000 },
+  { level: 10, name: 'God Mode', upgradeCost: 7500000000, tapValue: 1000, maxEnergy: 2500000, passiveRate: 200000 },
 ];
 
 export interface MineCard {
