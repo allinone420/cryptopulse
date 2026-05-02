@@ -4,9 +4,10 @@ import { collection, getDocs, query, orderBy, deleteDoc, doc, where, Timestamp, 
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from 'firebase/auth';
 import { UserData } from '../types/game';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, BarChart3, List, Trash2, X, Menu, Search, LogOut, ChevronRight, Calendar, Lock, Mail, Zap, Wallet, Settings, Check, PlayCircle } from 'lucide-react';
+import { Users, BarChart3, List, Trash2, X, Menu, Search, LogOut, ChevronRight, Calendar, Lock, Mail, Zap, Wallet, Settings, Check, PlayCircle, Filter } from 'lucide-react';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { MINE_CARDS } from '../lib/constants';
 
 export default function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -655,28 +656,29 @@ export default function AdminPanel() {
                     />
                   </div>
 
-                  <div className="flex flex-col gap-2">
-                    <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Daily Combo Card IDs (Comma separated)</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. card_1, card_5, card_12"
-                      value={dailyComboCards}
-                      onChange={(e) => setDailyComboCards(e.target.value)}
-                      className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold text-xs"
-                    />
-                    <div className="mt-4 p-4 bg-white/5 rounded-xl border border-white/5 space-y-3">
-                       <p className="text-[10px] font-black uppercase text-accent-gold tracking-widest">Card ID Reference Guide</p>
-                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[9px] font-medium text-text-secondary">
-                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">m_fan_tokens</span> <span>Fan Tokens</span></div>
-                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">m_staking</span> <span>Staking</span></div>
-                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">m_derivatives</span> <span>Derivatives</span></div>
-                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">pr_influencers</span> <span>Influencers</span></div>
-                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">pr_it_team</span> <span>IT Team</span></div>
-                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">l_kyc</span> <span>KYC</span></div>
-                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">s_ton_partner</span> <span>TON Partner</span></div>
-                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">s_mining_farm</span> <span>Mining Farm</span></div>
-                       </div>
-                       <p className="text-[8px] italic text-text-secondary">Use these exact IDs in the input above. Separate with commas.</p>
+                  <div className="flex flex-col gap-4">
+                    <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Daily Combo Cards (3 Required)</label>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {[0, 1, 2].map((index) => (
+                        <ComboSlot 
+                          key={index} 
+                          index={index} 
+                          dailyComboCards={dailyComboCards} 
+                          setDailyComboCards={setDailyComboCards} 
+                        />
+                      ))}
+                    </div>
+
+                    <div className="mt-2 p-4 bg-white/5 rounded-xl border border-white/5 space-y-3">
+                       <p className="text-[10px] font-black uppercase text-accent-gold tracking-widest">Current Selection (Internal IDs)</p>
+                       <input 
+                        type="text" 
+                        readOnly
+                        value={dailyComboCards}
+                        className="w-full bg-transparent border-none text-[10px] font-mono text-text-secondary outline-none"
+                      />
+                       <p className="text-[8px] italic text-text-secondary">Users must find exactly these 3 cards in the Mine tab to unlock the bounty.</p>
                     </div>
                   </div>
                 </div>
@@ -1054,3 +1056,57 @@ export default function AdminPanel() {
     </div>
   );
 }
+
+const ComboSlot = ({ index, dailyComboCards, setDailyComboCards }: { index: number, dailyComboCards: string, setDailyComboCards: (s: string) => void }) => {
+  const currentCards = dailyComboCards.split(',').map(s => s.trim()).filter(Boolean);
+  const selectedCardId = currentCards[index] || '';
+  const selectedCard = MINE_CARDS.find(c => c.id === selectedCardId);
+  const [selectedCategory, setSelectedCategory] = useState(selectedCard?.category || 'Markets');
+
+  return (
+    <div className="bg-black/40 border border-white/10 p-4 rounded-2xl flex flex-col gap-3">
+      <p className="text-[9px] font-black uppercase text-accent-gold tracking-widest">Card {index + 1}</p>
+      
+      <div className="space-y-1">
+        <label className="text-[8px] uppercase text-text-secondary font-bold">Category</label>
+        <select 
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value as any)}
+          className="w-full bg-white/5 border border-white/10 p-2 rounded-lg text-[10px] font-bold outline-none text-white appearance-none"
+        >
+          <option value="Markets">MARKETS</option>
+          <option value="PR&Team">PR&TEAM</option>
+          <option value="Legal">LEGAL</option>
+          <option value="Special">SPECIAL</option>
+        </select>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-[8px] uppercase text-text-secondary font-bold">Select Card</label>
+        <select 
+          value={selectedCardId}
+          onChange={(e) => {
+            const newId = e.target.value;
+            const cards = dailyComboCards.split(',').map(s => s.trim());
+            // Ensure array has exactly 3 slots for stability
+            const finalCards = [cards[0] || '', cards[1] || '', cards[2] || ''];
+            finalCards[index] = newId;
+            setDailyComboCards(finalCards.join(', '));
+          }}
+          className="w-full bg-white/5 border border-white/10 p-2 rounded-lg text-[10px] font-bold outline-none text-white appearance-none"
+        >
+          <option value="">Select a Card...</option>
+          {MINE_CARDS.filter(c => c.category === selectedCategory).map(card => (
+            <option key={card.id} value={card.id}>{card.name}</option>
+          ))}
+        </select>
+      </div>
+      
+      {selectedCardId && (
+         <div className="mt-1 px-2 py-1 bg-white/5 rounded-md border border-white/5">
+            <span className="text-[8px] font-mono text-text-secondary opacity-50 uppercase">ID: {selectedCardId}</span>
+         </div>
+      )}
+    </div>
+  );
+};
