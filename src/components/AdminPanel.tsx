@@ -34,7 +34,9 @@ export default function AdminPanel() {
   const [tgBotToken, setTgBotToken] = useState('');
   const [tgChannelId, setTgChannelId] = useState('');
   const [dailyCipherWord, setDailyCipherWord] = useState('');
+  const [dailyCipherReward, setDailyCipherReward] = useState(1000000);
   const [dailyComboCards, setDailyComboCards] = useState('');
+  const [dailyComboReward, setDailyComboReward] = useState(5000000);
   const [savingSettings, setSavingSettings] = useState(false);
 
   const [newAdTitle, setNewAdTitle] = useState('');
@@ -128,7 +130,9 @@ export default function AdminPanel() {
         tgBotToken,
         tgChannelId,
         dailyCipherWord,
+        dailyCipherReward,
         dailyComboCards: dailyComboCards.split(',').map(s => s.trim()).filter(Boolean),
+        dailyComboReward,
         updatedAt: serverTimestamp(),
         updatedBy: adminUser?.email || 'Admin'
       }, { merge: true });
@@ -218,7 +222,9 @@ export default function AdminPanel() {
         setTgBotToken(data.tgBotToken || '');
         setTgChannelId(data.tgChannelId || '');
         setDailyCipherWord(data.dailyCipherWord || '');
+        setDailyCipherReward(data.dailyCipherReward || 1000000);
         setDailyComboCards((data.dailyComboCards || []).join(', '));
+        setDailyComboReward(data.dailyComboReward || 5000000);
       }
       const coll = collection(db, 'users');
       let countSnapshot;
@@ -628,6 +634,28 @@ export default function AdminPanel() {
                   </div>
 
                   <div className="flex flex-col gap-2">
+                    <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Daily Cipher Reward</label>
+                    <input 
+                      type="number" 
+                      placeholder="e.g. 1000000"
+                      value={dailyCipherReward}
+                      onChange={(e) => setDailyCipherReward(Number(e.target.value))}
+                      className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-accent-gold font-black"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Daily Combo Reward</label>
+                    <input 
+                      type="number" 
+                      placeholder="e.g. 5000000"
+                      value={dailyComboReward}
+                      onChange={(e) => setDailyComboReward(Number(e.target.value))}
+                      className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-purple-400 font-black"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
                     <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Daily Combo Card IDs (Comma separated)</label>
                     <input 
                       type="text" 
@@ -636,7 +664,20 @@ export default function AdminPanel() {
                       onChange={(e) => setDailyComboCards(e.target.value)}
                       className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold text-xs"
                     />
-                    <p className="text-[10px] text-text-secondary italic ml-1">Specify 3 card IDs that unlock the combo bounty today.</p>
+                    <div className="mt-4 p-4 bg-white/5 rounded-xl border border-white/5 space-y-3">
+                       <p className="text-[10px] font-black uppercase text-accent-gold tracking-widest">Card ID Reference Guide</p>
+                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[9px] font-medium text-text-secondary">
+                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">m_fan_tokens</span> <span>Fan Tokens</span></div>
+                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">m_staking</span> <span>Staking</span></div>
+                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">m_derivatives</span> <span>Derivatives</span></div>
+                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">pr_influencers</span> <span>Influencers</span></div>
+                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">pr_it_team</span> <span>IT Team</span></div>
+                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">l_kyc</span> <span>KYC</span></div>
+                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">s_ton_partner</span> <span>TON Partner</span></div>
+                          <div className="flex justify-between border-b border-white/5 pb-1"><span className="text-white">s_mining_farm</span> <span>Mining Farm</span></div>
+                       </div>
+                       <p className="text-[8px] italic text-text-secondary">Use these exact IDs in the input above. Separate with commas.</p>
+                    </div>
                   </div>
                 </div>
               </div>

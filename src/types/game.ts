@@ -13,6 +13,10 @@ export interface GlobalSettings {
   adTasks?: AdTask[];
   tgBotToken?: string;
   tgChannelId?: string;
+  dailyCipherWord?: string;
+  dailyCipherReward?: number;
+  dailyComboCards?: string[];
+  dailyComboReward?: number;
 }
 
 export interface UserData {

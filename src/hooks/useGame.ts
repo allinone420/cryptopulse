@@ -637,17 +637,20 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     
     if (user.coins >= cost) {
       const newBoosts = { ...currentBoosts, [type]: level + 1 };
+      const newMaxEnergy = type === 'energyLimit' ? calculateMaxEnergy(user.level, level + 1) : user.maxEnergy;
       const newUser = {
         ...user,
         coins: user.coins - cost,
-        boosts: newBoosts
+        boosts: newBoosts,
+        maxEnergy: newMaxEnergy
       };
       setUser(newUser);
       
       try {
         await updateDoc(doc(db, 'users', user.uid), {
           coins: Math.floor(newUser.coins),
-          boosts: newBoosts
+          boosts: newBoosts,
+          maxEnergy: newMaxEnergy
         });
         hapticFeedback();
       } catch (err) {
@@ -667,18 +670,20 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     const refillsToday = lastRefillDate === today ? (currentBoosts.refillsToday || 0) : 0;
     
     if (refillsToday < 6) {
-      const maxEnergy = (LEVELS.find(l => l.level === user.level)?.maxEnergy || user.maxEnergy) + ((currentBoosts.energyLimit || 1) - 1) * 500;
+      const currentMaxEnergy = calculateMaxEnergy(user.level, currentBoosts.energyLimit || 1);
       const newBoosts = { ...currentBoosts, refillsToday: refillsToday + 1, lastFullRefill: now };
       const newUser = {
         ...user,
-        energy: maxEnergy,
+        energy: currentMaxEnergy,
+        maxEnergy: currentMaxEnergy,
         boosts: newBoosts
       };
       setUser(newUser);
       
       try {
         await updateDoc(doc(db, 'users', user.uid), {
-          energy: maxEnergy,
+          energy: currentMaxEnergy,
+          maxEnergy: currentMaxEnergy,
           boosts: newBoosts
         });
         hapticFeedback();
@@ -744,6 +749,7 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
   const claimCipher = useCallback(async () => {
     if (!user || user.dailyCipher?.isCompleted) return;
     
+    const reward = settings?.dailyCipherReward || DAILY_CIPHER_REWARD;
     const updatedCipher = {
       ...(user.dailyCipher || { word: 'SATO', isCompleted: false, lastUpdated: Date.now() }),
       isCompleted: true,
@@ -752,8 +758,8 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     
     const newUser = {
       ...user,
-      coins: user.coins + DAILY_CIPHER_REWARD,
-      totalCoins: user.totalCoins + DAILY_CIPHER_REWARD,
+      coins: user.coins + reward,
+      totalCoins: user.totalCoins + reward,
       dailyCipher: updatedCipher
     };
     
@@ -766,14 +772,16 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
         dailyCipher: updatedCipher
       });
       hapticFeedback();
+      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
     } catch (err) {
       console.error("Cipher claim failed:", err);
     }
-  }, [user]);
+  }, [user, settings]);
 
   const claimCombo = useCallback(async () => {
     if (!user || user.dailyCombo?.claimed) return;
     
+    const reward = settings?.dailyComboReward || DAILY_COMBO_REWARD;
     const updatedCombo = {
       ...(user.dailyCombo || { cards: [], claimed: false, lastUpdated: Date.now() }),
       claimed: true,
@@ -782,8 +790,8 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     
     const newUser = {
       ...user,
-      coins: user.coins + DAILY_COMBO_REWARD,
-      totalCoins: user.totalCoins + DAILY_COMBO_REWARD,
+      coins: user.coins + reward,
+      totalCoins: user.totalCoins + reward,
       dailyCombo: updatedCombo
     };
     
@@ -796,10 +804,11 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
         dailyCombo: updatedCombo
       });
       hapticFeedback();
+      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
     } catch (err) {
       console.error("Combo claim failed:", err);
     }
-  }, [user]);
+  }, [user, settings]);
 
   return { 
     user, loading, syncing, tap, levelUp, buyCard, setUser, settings, myReferrals,

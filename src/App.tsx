@@ -1312,11 +1312,14 @@ export default function App() {
                 <div className="w-full bg-green-500/10 border border-green-500/20 py-6 rounded-2xl flex flex-col items-center gap-2">
                    <CheckCircle2 size={32} className="text-green-500" />
                    <p className="text-green-500 font-black uppercase text-sm">Reward Claimed!</p>
-                   <p className="text-white font-bold">+{DAILY_CIPHER_REWARD.toLocaleString()} <Coins size={14} className="inline mb-1" /></p>
+                   <p className="text-white font-bold">+{(settings?.dailyCipherReward || DAILY_CIPHER_REWARD).toLocaleString()} <Coins size={14} className="inline mb-1" /></p>
                 </div>
               ) : (
                 <div className="w-full flex flex-col gap-4">
                   <div className="flex flex-col gap-2">
+                    <p className="text-[10px] text-accent-blue font-black uppercase tracking-widest text-center mb-1">
+                      Bounty: {(settings?.dailyCipherReward || DAILY_CIPHER_REWARD).toLocaleString()} Coins
+                    </p>
                     <input 
                       type="text" 
                       value={cipherInput}
@@ -1392,10 +1395,13 @@ export default function App() {
                 <div className="w-full bg-green-500/10 border border-green-500/20 py-6 rounded-2xl flex flex-col items-center gap-2">
                    <CheckCircle2 size={32} className="text-green-500" />
                    <p className="text-green-500 font-black uppercase text-sm">Combo Complete!</p>
-                   <p className="text-white font-bold">+{DAILY_COMBO_REWARD.toLocaleString()} <Coins size={14} className="inline mb-1" /></p>
+                   <p className="text-white font-bold">+{(settings?.dailyComboReward || DAILY_COMBO_REWARD).toLocaleString()} <Coins size={14} className="inline mb-1" /></p>
                 </div>
               ) : (
                 <div className="w-full flex flex-col gap-6">
+                  <p className="text-xs font-black text-purple-400 uppercase tracking-widest -mb-4">
+                    Bounty: {(settings?.dailyComboReward || DAILY_COMBO_REWARD).toLocaleString()} Coins
+                  </p>
                   <div className="flex justify-center gap-3">
                     {[1, 2, 3].map((i) => {
                       const isFound = (user?.dailyCombo?.cards?.length || 0) >= i;

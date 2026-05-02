@@ -23,7 +23,10 @@
         "completedTasks": { "type": "array" },
         "lastDailyReward": { "type": "number" },
         "dailyStreak": { "type": "number" },
-        "level": { "type": "number" }
+        "level": { "type": "number" },
+        "boosts": { "type": "object" },
+        "dailyCipher": { "type": "object" },
+        "dailyCombo": { "type": "object" }
       },
       "required": ["uid", "telegramId", "coins", "energy", "referralCode"]
     },
@@ -34,7 +37,11 @@
       "properties": {
         "referrerReward": { "type": "number" },
         "refereeReward": { "type": "number" },
-        "passiveCommission": { "type": "number", "description": "Percentage 0-100" }
+        "passiveCommission": { "type": "number", "description": "Percentage 0-100" },
+        "dailyCipherWord": { "type": "string" },
+        "dailyCipherReward": { "type": "number" },
+        "dailyComboCards": { "type": "array" },
+        "dailyComboReward": { "type": "number" }
       },
       "required": ["referrerReward", "refereeReward"]
     }
