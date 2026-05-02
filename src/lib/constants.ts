@@ -19,6 +19,15 @@ export const MAX_CARD_LEVEL = 25;
 export const REFERRAL_REWARD_REFERRER = 5000;
 export const REFERRAL_REWARD_REFEREE = 2500;
 
+export const DAILY_CIPHER_REWARD = 1000000; // 1M for cipher
+export const DAILY_COMBO_REWARD = 5000000; // 5M for combo
+
+export const BOOST_COSTS = {
+  multiTap: 2000,
+  energyLimit: 2000,
+  rechargeSpeed: 5000
+};
+
 export const LEVELS = [
   { level: 1, name: 'Bronze', upgradeCost: 0, tapValue: 1, maxEnergy: 1000, passiveRate: 1 },
   { level: 2, name: 'Silver', upgradeCost: 30000, tapValue: 2, maxEnergy: 3000, passiveRate: 10 },

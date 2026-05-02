@@ -13,9 +13,9 @@ export const Navigation = ({ active, setActive }: TabProps) => {
   const tabs = [
     { id: 'home', icon: Coins, label: 'Exchange' },
     { id: 'mine', icon: Pickaxe, label: 'Mine' },
-    { id: 'tasks', icon: CheckCircle2, label: 'Earn' },
     { id: 'friends', icon: Users, label: 'Friends' },
-    { id: 'leaders', icon: Trophy, label: 'Leaders' },
+    { id: 'tasks', icon: CheckCircle2, label: 'Earn' },
+    { id: 'airdrop', icon: Wallet, label: 'Airdrop' },
   ];
 
   return (

@@ -5,7 +5,8 @@ import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, increment, getDocFromServer, query, collection, orderBy, limit, getDocs, where } from 'firebase/firestore';
 import { initTelegram, hapticFeedback } from '../lib/telegram';
 import { UserData } from '../types/game';
-import { INITIAL_ENERGY, ENERGY_REFILL_RATE, LEVELS, REFERRAL_REWARD_REFERRER, REFERRAL_REWARD_REFEREE, MINE_CARDS, MAX_CARD_LEVEL } from '../lib/constants';
+import { INITIAL_ENERGY, ENERGY_REFILL_RATE, LEVELS, REFERRAL_REWARD_REFERRER, REFERRAL_REWARD_REFEREE, MINE_CARDS, MAX_CARD_LEVEL, BOOST_COSTS, DAILY_CIPHER_REWARD, DAILY_COMBO_REWARD, DAILY_REWARD_BASE, DAILY_REWARD_STEP } from '../lib/constants';
+import confetti from 'canvas-confetti';
 import { useTonAddress, useTonWallet } from '@tonconnect/ui-react';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 
@@ -34,6 +35,7 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
   const [settings, setSettings] = useState<any>(null);
   const [myReferrals, setMyReferrals] = useState<any[]>([]);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isClaimingRef = useRef(false);
   const wallet = useTonWallet();
   const address = useTonAddress();
   const isConnected = !!wallet;
@@ -51,6 +53,12 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     theme: WebApp?.colorScheme || 'light',
     startParam: WebApp?.initDataUnsafe?.start_param,
   };
+
+  // Helper to calculate current max energy including boosts
+  const calculateMaxEnergy = useCallback((level: number, energyLimitBoost: number) => {
+    const baseEnergy = LEVELS.find(l => l.level === level)?.maxEnergy || 1000;
+    return baseEnergy + (energyLimitBoost - 1) * 500;
+  }, []);
 
   // Connection Test & Init
   useEffect(() => {
@@ -277,7 +285,24 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
               adCompletions: {},
               dailyStreak: 0,
               level: 1,
-              mineCards: {}
+              mineCards: {},
+              boosts: {
+                multiTap: 1,
+                energyLimit: 1,
+                rechargeSpeed: 1,
+                refillsToday: 0,
+                lastFullRefill: 0
+              },
+              dailyCipher: {
+                word: 'SATO', // Default word, admin can change via settings
+                isCompleted: false,
+                lastUpdated: Date.now()
+              },
+              dailyCombo: {
+                cards: [], // Will be populated by logic or settings
+                claimed: false,
+                lastUpdated: Date.now()
+              }
             };
             
             try {
@@ -342,16 +367,18 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
 
         // Energy refill
         let newEnergy = prev.energy;
-        if (energySeconds >= 1 && prev.energy < prev.maxEnergy) {
-          newEnergy = Math.min(prev.maxEnergy, prev.energy + (ENERGY_REFILL_RATE * energySeconds));
+        const currentMaxEnergy = calculateMaxEnergy(prev.level, prev.boosts?.energyLimit || 1);
+        const refillRate = ENERGY_REFILL_RATE * (prev.boosts?.rechargeSpeed || 1);
+
+        if (energySeconds >= 1 && prev.energy < currentMaxEnergy) {
+          newEnergy = Math.min(currentMaxEnergy, prev.energy + (refillRate * energySeconds));
         }
 
         // Passive income
         let newCoins = prev.coins;
         let newTotal = prev.totalCoins;
         if (passiveSeconds >= 1) {
-          const currentLevelInfo = LEVELS.find(l => l.level === prev.level) || LEVELS[0];
-          const income = currentLevelInfo.passiveRate * passiveSeconds;
+          const income = prev.passiveIncomeRate * passiveSeconds;
           newCoins += income;
           newTotal += income;
         }
@@ -361,6 +388,7 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
           energy: newEnergy,
           coins: newCoins,
           totalCoins: newTotal,
+          maxEnergy: currentMaxEnergy, // Keep display synced
           lastEnergyUpdate: now,
           lastPassiveIncomeUpdate: now
         };
@@ -368,7 +396,7 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [user?.uid]);
+  }, [user?.uid, calculateMaxEnergy]);
 
   // Sync Wallet to User Doc
   useEffect(() => {
@@ -435,6 +463,9 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
             lastAdView: user.lastAdView || null,
             adCompletions: user.adCompletions || {},
             dailyStreak: user.dailyStreak,
+            boosts: user.boosts || null,
+            dailyCipher: user.dailyCipher || null,
+            dailyCombo: user.dailyCombo || null,
             lastActive: Date.now()
           }),
           rewardReferrer()
@@ -454,17 +485,23 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
   const tap = useCallback(() => {
     let success = false;
     setUser((prev) => {
-      if (!prev || Math.floor(prev.energy) < 1) return prev;
+      if (!prev) return prev;
+      
+      const currentMaxEnergy = calculateMaxEnergy(prev.level, prev.boosts?.energyLimit || 1);
+      const tapCost = prev.boosts?.multiTap || 1;
+      
+      if (Math.floor(prev.energy) < tapCost) return prev;
       
       const currentLevel = LEVELS.find(l => l.level === prev.level) || LEVELS[0];
-      const tapVal = currentLevel.tapValue;
+      const tapVal = currentLevel.tapValue * (prev.boosts?.multiTap || 1);
       
       success = true;
       return {
         ...prev,
         coins: prev.coins + tapVal,
         totalCoins: prev.totalCoins + tapVal,
-        energy: prev.energy - 1
+        energy: Math.max(0, prev.energy - tapCost),
+        maxEnergy: currentMaxEnergy
       };
     });
 
@@ -472,7 +509,7 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
       hapticFeedback();
     }
     return success;
-  }, [user?.level]);
+  }, [user?.level, calculateMaxEnergy]);
 
   const levelUp = useCallback(async () => {
     if (!user) return;
@@ -526,11 +563,28 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
       const newMineCards = { ...(user.mineCards || {}), [cardId]: currentLevel + 1 };
       const newRate = calculatePassiveRate(user.level, newMineCards);
       
+      // Daily Combo logic
+      const today = new Date().toDateString();
+      const lastComboUpdate = user.dailyCombo?.lastUpdated ? new Date(user.dailyCombo.lastUpdated).toDateString() : '';
+      let currentComboCards = (today === lastComboUpdate) ? (user.dailyCombo?.cards || []) : [];
+      
+      // If this card is part of today's combo and not already in our logic
+      if (settings?.dailyComboCards?.includes(cardId) && !currentComboCards.includes(cardId)) {
+        currentComboCards = [...currentComboCards, cardId];
+      }
+
+      const updatedCombo = {
+        ...(user.dailyCombo || { claimed: false }),
+        cards: currentComboCards,
+        lastUpdated: Date.now()
+      };
+
       const newUser = {
         ...user,
         coins: user.coins - upgradeCost,
         mineCards: newMineCards,
-        passiveIncomeRate: newRate
+        passiveIncomeRate: newRate,
+        dailyCombo: updatedCombo
       };
       
       setUser(newUser);
@@ -540,7 +594,8 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
         await updateDoc(userRef, {
           coins: Math.floor(newUser.coins),
           mineCards: newMineCards,
-          passiveIncomeRate: newRate
+          passiveIncomeRate: newRate,
+          dailyCombo: updatedCombo
         });
         hapticFeedback();
       } catch (err) {
@@ -574,5 +629,180 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     }
   }, [activeTab, user?.uid]);
 
-  return { user, loading, syncing, tap, levelUp, buyCard, setUser, settings, myReferrals };
+  const upgradeBoost = useCallback(async (type: 'multiTap' | 'energyLimit' | 'rechargeSpeed') => {
+    if (!user) return;
+    const currentBoosts = user.boosts || { multiTap: 1, energyLimit: 1, rechargeSpeed: 1, refillsToday: 0, lastFullRefill: 0 };
+    const level = currentBoosts[type] || 1;
+    const cost = BOOST_COSTS[type] * Math.pow(2.5, level - 1);
+    
+    if (user.coins >= cost) {
+      const newBoosts = { ...currentBoosts, [type]: level + 1 };
+      const newUser = {
+        ...user,
+        coins: user.coins - cost,
+        boosts: newBoosts
+      };
+      setUser(newUser);
+      
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          coins: Math.floor(newUser.coins),
+          boosts: newBoosts
+        });
+        hapticFeedback();
+      } catch (err) {
+        console.error("Boost upgrade failed:", err);
+      }
+    }
+  }, [user]);
+
+  const fullRefill = useCallback(async () => {
+    if (!user) return;
+    const currentBoosts = user.boosts || { multiTap: 1, energyLimit: 1, rechargeSpeed: 1, refillsToday: 0, lastFullRefill: 0 };
+    const now = Date.now();
+    
+    // Reset refills if it's a new day
+    const lastRefillDate = currentBoosts.lastFullRefill ? new Date(currentBoosts.lastFullRefill).toDateString() : '';
+    const today = new Date().toDateString();
+    const refillsToday = lastRefillDate === today ? (currentBoosts.refillsToday || 0) : 0;
+    
+    if (refillsToday < 6) {
+      const maxEnergy = (LEVELS.find(l => l.level === user.level)?.maxEnergy || user.maxEnergy) + ((currentBoosts.energyLimit || 1) - 1) * 500;
+      const newBoosts = { ...currentBoosts, refillsToday: refillsToday + 1, lastFullRefill: now };
+      const newUser = {
+        ...user,
+        energy: maxEnergy,
+        boosts: newBoosts
+      };
+      setUser(newUser);
+      
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          energy: maxEnergy,
+          boosts: newBoosts
+        });
+        hapticFeedback();
+      } catch (err) {
+        console.error("Full refill failed:", err);
+      }
+    } else {
+      alert("Daily limit reached (6/6). Come back tomorrow!");
+    }
+  }, [user]);
+
+  const claimDailyReward = useCallback(async () => {
+    if (!user || isClaimingRef.current) return;
+
+    const now = Date.now();
+    const lastClaim = user.lastDailyReward || 0;
+    const isNewDay = new Date(lastClaim).toDateString() !== new Date(now).toDateString();
+
+    if (!isNewDay) {
+      alert("You already claimed your reward today!");
+      return;
+    }
+
+    isClaimingRef.current = true;
+    const rewardCount = user.dailyStreak; // use existing streak for day calculation
+    const reward = DAILY_REWARD_BASE + (rewardCount * DAILY_REWARD_STEP);
+    
+    // Streak logic: if last claim was yesterday, increment, else reset to 0
+    let nextStreak = user.dailyStreak + 1;
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (user.lastDailyReward && new Date(user.lastDailyReward).toDateString() !== yesterday.toDateString()) {
+       nextStreak = 1;
+    }
+    if (nextStreak > 10) nextStreak = 1;
+
+    const newUser = {
+      ...user,
+      coins: user.coins + reward,
+      totalCoins: user.totalCoins + reward,
+      dailyStreak: nextStreak,
+      lastDailyReward: now
+    };
+
+    setUser(newUser);
+
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        coins: Math.floor(newUser.coins),
+        totalCoins: Math.floor(newUser.totalCoins),
+        dailyStreak: newUser.dailyStreak,
+        lastDailyReward: now
+      });
+      hapticFeedback();
+      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+    } catch (err) {
+      console.error("Daily claim failed:", err);
+    } finally {
+      isClaimingRef.current = false;
+    }
+  }, [user]);
+
+  const claimCipher = useCallback(async () => {
+    if (!user || user.dailyCipher?.isCompleted) return;
+    
+    const updatedCipher = {
+      ...(user.dailyCipher || { word: 'SATO', isCompleted: false, lastUpdated: Date.now() }),
+      isCompleted: true,
+      lastUpdated: Date.now()
+    };
+    
+    const newUser = {
+      ...user,
+      coins: user.coins + DAILY_CIPHER_REWARD,
+      totalCoins: user.totalCoins + DAILY_CIPHER_REWARD,
+      dailyCipher: updatedCipher
+    };
+    
+    setUser(newUser);
+    
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        coins: Math.floor(newUser.coins),
+        totalCoins: Math.floor(newUser.totalCoins),
+        dailyCipher: updatedCipher
+      });
+      hapticFeedback();
+    } catch (err) {
+      console.error("Cipher claim failed:", err);
+    }
+  }, [user]);
+
+  const claimCombo = useCallback(async () => {
+    if (!user || user.dailyCombo?.claimed) return;
+    
+    const updatedCombo = {
+      ...(user.dailyCombo || { cards: [], claimed: false, lastUpdated: Date.now() }),
+      claimed: true,
+      lastUpdated: Date.now()
+    };
+    
+    const newUser = {
+      ...user,
+      coins: user.coins + DAILY_COMBO_REWARD,
+      totalCoins: user.totalCoins + DAILY_COMBO_REWARD,
+      dailyCombo: updatedCombo
+    };
+    
+    setUser(newUser);
+    
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        coins: Math.floor(newUser.coins),
+        totalCoins: Math.floor(newUser.totalCoins),
+        dailyCombo: updatedCombo
+      });
+      hapticFeedback();
+    } catch (err) {
+      console.error("Combo claim failed:", err);
+    }
+  }, [user]);
+
+  return { 
+    user, loading, syncing, tap, levelUp, buyCard, setUser, settings, myReferrals,
+    upgradeBoost, fullRefill, claimCipher, claimCombo, claimDailyReward
+  };
 };

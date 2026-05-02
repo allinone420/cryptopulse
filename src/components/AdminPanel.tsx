@@ -33,6 +33,8 @@ export default function AdminPanel() {
   const [adTasks, setAdTasks] = useState<any[]>([]); // Array of {id, title, reward, type}
   const [tgBotToken, setTgBotToken] = useState('');
   const [tgChannelId, setTgChannelId] = useState('');
+  const [dailyCipherWord, setDailyCipherWord] = useState('');
+  const [dailyComboCards, setDailyComboCards] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
 
   const [newAdTitle, setNewAdTitle] = useState('');
@@ -125,6 +127,8 @@ export default function AdminPanel() {
         adTasks,
         tgBotToken,
         tgChannelId,
+        dailyCipherWord,
+        dailyComboCards: dailyComboCards.split(',').map(s => s.trim()).filter(Boolean),
         updatedAt: serverTimestamp(),
         updatedBy: adminUser?.email || 'Admin'
       }, { merge: true });
@@ -213,6 +217,8 @@ export default function AdminPanel() {
         setAdTasks(data.adTasks || []);
         setTgBotToken(data.tgBotToken || '');
         setTgChannelId(data.tgChannelId || '');
+        setDailyCipherWord(data.dailyCipherWord || '');
+        setDailyComboCards((data.dailyComboCards || []).join(', '));
       }
       const coll = collection(db, 'users');
       let countSnapshot;
@@ -598,6 +604,39 @@ export default function AdminPanel() {
                     <p className="text-[10px] text-text-secondary italic ml-1 tracking-tight leading-relaxed">
                       Used to check if user UID is in the subscriber list.
                     </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-card-bg p-8 rounded-3xl border border-white/10 shadow-xl flex flex-col gap-6">
+                <div className="flex items-center gap-3 text-purple-400 mb-2">
+                  <Zap size={20} />
+                  <h3 className="font-black uppercase tracking-widest text-sm">Daily Tasks Config</h3>
+                </div>
+                
+                <div className="flex flex-col gap-6">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Daily Cipher Word</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. SATO"
+                      value={dailyCipherWord}
+                      onChange={(e) => setDailyCipherWord(e.target.value.toUpperCase())}
+                      className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-black tracking-[0.2em]"
+                    />
+                    <p className="text-[10px] text-text-secondary italic ml-1">The secret word users must type in the Daily Cipher modal.</p>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] uppercase font-black text-text-secondary tracking-widest ml-1">Daily Combo Card IDs (Comma separated)</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. card_1, card_5, card_12"
+                      value={dailyComboCards}
+                      onChange={(e) => setDailyComboCards(e.target.value)}
+                      className="bg-black/40 border border-white/10 p-4 rounded-xl outline-none focus:border-accent-gold text-white font-bold text-xs"
+                    />
+                    <p className="text-[10px] text-text-secondary italic ml-1">Specify 3 card IDs that unlock the combo bounty today.</p>
                   </div>
                 </div>
               </div>

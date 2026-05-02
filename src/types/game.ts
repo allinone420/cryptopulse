@@ -39,6 +39,25 @@ export interface UserData {
   level: number;
   mineCards?: { [cardId: string]: number }; // cardId -> level
   lastActive?: number;
+  
+  // New Features
+  dailyCipher?: {
+    word: string;
+    isCompleted: boolean;
+    lastUpdated: number;
+  };
+  dailyCombo?: {
+    cards: string[]; // IDs of the cards in today's combo
+    claimed: boolean;
+    lastUpdated: number;
+  };
+  boosts?: {
+    multiTap: number;
+    energyLimit: number;
+    rechargeSpeed: number;
+    lastFullRefill?: number;
+    refillsToday?: number;
+  };
 }
 
 export interface Task {
