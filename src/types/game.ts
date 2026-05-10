@@ -43,6 +43,12 @@ export interface UserData {
   level: number;
   mineCards?: { [cardId: string]: number }; // cardId -> level
   lastActive?: number;
+  status: 'active' | 'banned';
+  lastSync: number | any;
+  isVerified?: boolean;
+  tonWallet?: string;
+  verificationTxHash?: string;
+  airdropScore?: number;
   
   // New Features
   dailyCipher?: {

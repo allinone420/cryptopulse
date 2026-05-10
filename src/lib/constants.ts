@@ -22,23 +22,33 @@ export const REFERRAL_REWARD_REFEREE = 2500;
 export const DAILY_CIPHER_REWARD = 1000000; // 1M for cipher
 export const DAILY_COMBO_REWARD = 5000000; // 5M for combo
 
+export const AIRDROP_CONFIG = {
+  MIN_TRANSACTION_AMOUNT: 0.1, // Minimum TON for verification
+  ADMIN_TON_ADDRESS: "UQBx...YOUR_DESTINATION_ADDRESS", // Replace with your real TON address
+  WEIGHTS: {
+    COINS: 0.1,
+    PROFIT_PER_HOUR: 10,
+    REFERRALS: 5000
+  }
+};
+
 export const BOOST_COSTS = {
-  multiTap: 2000,
-  energyLimit: 2000,
-  rechargeSpeed: 5000
+  multiTap: 5000,
+  energyLimit: 10000,
+  rechargeSpeed: 20000
 };
 
 export const LEVELS = [
   { level: 1, name: 'Bronze', upgradeCost: 0, tapValue: 1, maxEnergy: 1000, passiveRate: 1 },
-  { level: 2, name: 'Silver', upgradeCost: 30000, tapValue: 2, maxEnergy: 3000, passiveRate: 10 },
-  { level: 3, name: 'Gold', upgradeCost: 150000, tapValue: 5, maxEnergy: 6000, passiveRate: 35 },
-  { level: 4, name: 'Platinum', upgradeCost: 750000, tapValue: 10, maxEnergy: 12000, passiveRate: 120 },
-  { level: 5, name: 'Diamond', upgradeCost: 3000000, tapValue: 20, maxEnergy: 25000, passiveRate: 400 },
-  { level: 6, name: 'Epic', upgradeCost: 15000000, tapValue: 50, maxEnergy: 60000, passiveRate: 1500 },
-  { level: 7, name: 'Legendary', upgradeCost: 75000000, tapValue: 100, maxEnergy: 150000, passiveRate: 5000 },
-  { level: 8, name: 'Master', upgradeCost: 350000000, tapValue: 250, maxEnergy: 400000, passiveRate: 18000 },
-  { level: 9, name: 'Grandmaster', upgradeCost: 1500000000, tapValue: 500, maxEnergy: 1000000, passiveRate: 60000 },
-  { level: 10, name: 'God Mode', upgradeCost: 7500000000, tapValue: 1000, maxEnergy: 2500000, passiveRate: 200000 },
+  { level: 2, name: 'Silver', upgradeCost: 50000, tapValue: 2, maxEnergy: 3000, passiveRate: 10 },
+  { level: 3, name: 'Gold', upgradeCost: 250000, tapValue: 5, maxEnergy: 6000, passiveRate: 35 },
+  { level: 4, name: 'Platinum', upgradeCost: 1000000, tapValue: 10, maxEnergy: 12000, passiveRate: 120 },
+  { level: 5, name: 'Diamond', upgradeCost: 5000000, tapValue: 20, maxEnergy: 25000, passiveRate: 400 },
+  { level: 6, name: 'Epic', upgradeCost: 25000000, tapValue: 50, maxEnergy: 60000, passiveRate: 1500 },
+  { level: 7, name: 'Legendary', upgradeCost: 125000000, tapValue: 100, maxEnergy: 150000, passiveRate: 5000 },
+  { level: 8, name: 'Master', upgradeCost: 600000000, tapValue: 250, maxEnergy: 400000, passiveRate: 18000 },
+  { level: 9, name: 'Grandmaster', upgradeCost: 2500000000, tapValue: 500, maxEnergy: 1000000, passiveRate: 60000 },
+  { level: 10, name: 'God Mode', upgradeCost: 10000000000, tapValue: 1000, maxEnergy: 2500000, passiveRate: 200000 },
 ];
 
 export interface MineCard {

@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, animate } from 'framer-motion';
 import { useGame } from './hooks/useGame';
 import { Navigation, Header } from './components/Navigation';
-import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCircle, Copy, Check, X, Pickaxe, Info, TrendingUp, Clock, Calendar, MessageSquare, LayoutGrid, Gift, Sparkles, Brain } from 'lucide-react';
-import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAME, LEVELS, MINE_CARDS, MineCard, MAX_CARD_LEVEL, DAILY_CIPHER_REWARD, DAILY_COMBO_REWARD, BOOST_COSTS } from './lib/constants';
+import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCircle, Copy, Check, X, Pickaxe, Info, TrendingUp, Clock, Calendar, MessageSquare, LayoutGrid, Gift, Sparkles, Brain, ShieldCheck, Lock } from 'lucide-react';
+import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAME, LEVELS, MINE_CARDS, MineCard, MAX_CARD_LEVEL, DAILY_CIPHER_REWARD, DAILY_COMBO_REWARD, BOOST_COSTS, AIRDROP_CONFIG } from './lib/constants';
 import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
@@ -32,10 +32,48 @@ export default function App() {
     } catch (e) {}
   };
 
+  const formatNumber = (num: number) => {
+    if (num >= 1000000000) return (num / 1000000000).toFixed(2) + 'B';
+    if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
+    return Math.floor(num).toString();
+  };
+
   const { 
     user, loading, syncing, tap, levelUp, buyCard, setUser, settings, myReferrals,
-    upgradeBoost, fullRefill, claimCipher, claimCombo, claimDailyReward
+    upgradeBoost, fullRefill, claimCipher, claimCombo, claimDailyReward, verifyWallet
   } = useGame(activeTab, isAdminPath);
+
+  // Ban Screen
+  if (user?.status === 'banned') {
+    return (
+      <div className="min-h-screen bg-[#0a0b0d] flex items-center justify-center p-8 text-center text-white font-sans">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-xs flex flex-col gap-8 items-center"
+        >
+          <div className="w-24 h-24 bg-red-500/10 rounded-[32px] flex items-center justify-center text-red-500 border border-red-500/20 shadow-[0_0_50px_rgba(239,68,68,0.15)] relative group">
+            <div className="absolute inset-0 bg-red-500/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+            <Lock size={48} className="relative z-10" />
+          </div>
+          <div>
+            <h1 className="text-4xl font-black italic uppercase tracking-tighter text-red-500 leading-none">Access<br/>Terminated</h1>
+            <p className="text-text-secondary text-sm mt-4 italic leading-relaxed px-2">Your account has been permanently restricted due to suspicious activity or violation of our terms of service.</p>
+          </div>
+          <div className="w-16 h-1 bg-white/5 rounded-full" />
+          <div className="flex flex-col gap-1">
+             <p className="text-[10px] text-text-secondary uppercase tracking-widest font-black">Support Reference</p>
+             <p className="text-xs font-mono opacity-50 bg-white/5 px-4 py-2 rounded-xl">{user.uid.slice(0, 12).toUpperCase()}</p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+  
+  const [txHashInput, setTxHashInput] = useState('');
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   
   const [adCooldown, setAdCooldown] = useState(0);
   const [verifyingTask, setVerifyingTask] = useState<string | null>(null);
@@ -810,21 +848,51 @@ export default function App() {
   const renderAirdrop = () => (
     <div className="p-5 flex flex-col gap-6 pb-24 overflow-y-auto max-h-screen">
       <div className="flex flex-col items-center text-center gap-4 mt-4">
-        <div className="w-20 h-20 bg-card-bg rounded-[28px] flex items-center justify-center text-accent-gold transform -rotate-3 border-b-4 border-black/20 shadow-xl">
+        <div className="w-20 h-20 bg-card-bg rounded-[28px] flex items-center justify-center text-accent-gold transform -rotate-3 border-b-4 border-black/20 shadow-xl relative">
           <Wallet size={32} />
+          {user?.isVerified && (
+            <div className="absolute -top-1 -right-1 bg-green-500 text-black rounded-full p-1 border-2 border-[#0a0b0d]">
+              <Check size={12} strokeWidth={4} />
+            </div>
+          )}
         </div>
         <div>
           <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">Airdrop Tasks</h2>
-          <p className="text-text-secondary text-xs max-w-[280px]">Listing is coming soon. Complete the tasks to stay qualified!</p>
+          <p className="text-text-secondary text-xs max-w-[280px]">Complete verification to unlock your eligibility for the upcoming distribution.</p>
         </div>
       </div>
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2 mb-1">
           <Zap className="text-accent-blue" size={20} />
-          <h2 className="text-lg font-black text-white tracking-tight uppercase italic">Requirements</h2>
+          <h2 className="text-lg font-black text-white tracking-tight uppercase italic">Mandatory Tasks</h2>
         </div>
         
+        {/* Verification Task */}
+        <button 
+          onClick={() => !user?.isVerified && setShowVerificationModal(true)}
+          className={`bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all ${user?.isVerified ? 'opacity-80' : 'active:scale-95'}`}
+        >
+          <div className="flex items-center gap-3.5 text-left">
+            <div className="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center text-red-500">
+               <Lock size={24} />
+            </div>
+            <div>
+              <h4 className="text-white font-bold text-sm">Identity Verification</h4>
+              <p className="text-[10px] text-text-secondary">
+                {user?.isVerified ? 'Verification Complete' : user?.verificationTxHash ? 'Verification Pending...' : 'Required: 0.1 TON Transaction'}
+              </p>
+            </div>
+          </div>
+          {user?.isVerified ? (
+            <CheckCircle2 className="text-green-500" size={24} />
+          ) : user?.verificationTxHash ? (
+            <Clock className="text-orange-500 animate-pulse" size={20} />
+          ) : (
+            <ChevronRight size={20} className="text-white/20" />
+          )}
+        </button>
+
         <div className="bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center text-accent-gold">
@@ -832,7 +900,7 @@ export default function App() {
             </div>
             <div>
               <h4 className="text-white font-bold text-sm">Connect Wallet</h4>
-              <p className="text-text-secondary text-[10px]">{user?.walletAddress ? 'Connected' : 'Wallet not found'}</p>
+              <p className="text-text-secondary text-[10px]">{user?.walletAddress ? 'Connected' : 'Wallet Not Linked'}</p>
             </div>
           </div>
           {user?.walletAddress ? (
@@ -848,28 +916,30 @@ export default function App() {
                <Pickaxe size={24} />
             </div>
             <div>
-              <h4 className="text-white font-bold text-sm">Profit Per Hour</h4>
-              <p className="text-text-secondary text-[10px]">Higher is better</p>
+              <h4 className="text-white font-bold text-sm">Profit Score</h4>
+              <p className="text-text-secondary text-[10px]">Accumulated Passive Income</p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-white font-bold text-xs">{(Math.floor((user?.passiveIncomeRate || 0) * 3600)).toLocaleString()}</p>
-            <p className="text-[10px] text-accent-gold font-bold">READY</p>
+            <p className="text-white font-bold text-xs">{formatNumber(Math.floor((user?.passiveIncomeRate || 0) * 3600))}</p>
+            <p className="text-[8px] text-accent-gold font-black uppercase">Active</p>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 bg-accent-gold/10 border border-accent-gold/20 p-5 rounded-3xl flex flex-col items-center text-center gap-3">
-         <Trophy size={48} className="text-accent-gold animate-pulse" />
-         <h4 className="text-white font-black uppercase text-sm italic">Global Leaderboard</h4>
-         <p className="text-text-secondary text-[10px] leading-relaxed">Competition is tough! See how you stack up against the top players in the SatoCryp ecosystem.</p>
-         <button 
-           onClick={() => setActiveTab('leaders')}
-           className="bg-accent-gold text-black px-6 py-2 rounded-xl font-black text-xs uppercase tracking-widest mt-2"
-         >
-           View Ranking
-         </button>
-      </div>
+      {user?.airdropScore ? (
+        <div className="bg-accent-gold/10 border border-accent-gold/20 p-6 rounded-3xl flex flex-col items-center text-center gap-2">
+           <Trophy size={48} className="text-accent-gold mb-2" />
+           <p className="text-[10px] text-accent-gold uppercase font-black tracking-widest leading-none">Est. Airdrop Points</p>
+           <h3 className="text-4xl font-black italic text-white tracking-tighter">{user.airdropScore.toLocaleString()}</h3>
+           <p className="text-text-secondary text-[9px] italic mt-2">Score updated periodically by the system.</p>
+        </div>
+      ) : (
+        <div className="mt-4 bg-accent-gold/5 border border-white/5 p-6 rounded-3xl flex flex-col items-center text-center gap-3">
+           <Info size={32} className="text-text-secondary opacity-20" />
+           <p className="text-text-secondary text-[10px] leading-relaxed max-w-[240px]">Scores are calculated based on activity. Check back soon for your current ranking.</p>
+        </div>
+      )}
     </div>
   );
   const renderMine = () => {
@@ -921,7 +991,7 @@ export default function App() {
             {MINE_CARDS.filter(c => c.category === mineCategory).map(card => {
               const level = user?.mineCards?.[card.id] || 0;
               const isMaxLevel = level >= MAX_CARD_LEVEL;
-              const upgradeCost = Math.floor(card.baseCost * Math.pow(1.5, level));
+              const upgradeCost = Math.floor(card.baseCost * Math.pow(1.6, level));
               
               // Calculate current profit and next level profit for display
               const calculateCardProfit = (l: number) => {
@@ -1047,6 +1117,97 @@ export default function App() {
 
         <Navigation active={activeTab} setActive={setActiveTab} />
       </div>
+
+      {/* Wallet Verification Modal */}
+      <AnimatePresence>
+        {showVerificationModal && (
+          <div 
+            onClick={() => setShowVerificationModal(false)}
+            className="fixed inset-0 z-[150] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl"
+          >
+            <motion.div
+              onClick={(e) => e.stopPropagation()}
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-[#1c1f24] w-full max-w-sm rounded-[40px] border border-red-500/30 p-8 flex flex-col items-center text-center gap-6 shadow-[0_0_50px_rgba(239,68,68,0.1)] relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-50" />
+              
+              <div className="w-20 h-20 bg-red-500/10 rounded-[28px] flex items-center justify-center text-red-500 shadow-lg shadow-red-500/5">
+                <ShieldCheck size={40} />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter">Verify Identity</h2>
+                <p className="text-text-secondary text-xs mt-2 px-4 italic">To prevent bots and qualify for airdrop, a small verification transaction is required.</p>
+              </div>
+
+              <div className="w-full bg-black/40 rounded-3xl border border-white/5 p-5 flex flex-col gap-4">
+                 <div className="flex flex-col gap-1 items-start">
+                    <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest ml-1">Send Exactly</p>
+                    <div className="text-2xl font-black text-white flex items-center gap-2">
+                       {AIRDROP_CONFIG.MIN_TRANSACTION_AMOUNT} TON <Zap size={18} className="text-accent-blue" />
+                    </div>
+                 </div>
+                 
+                 <div className="h-px bg-white/5" />
+
+                 <div className="flex flex-col gap-2 items-start">
+                    <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest ml-1">To Address</p>
+                    <div className="w-full bg-white/5 p-3 rounded-xl border border-dashed border-white/10 flex items-center justify-between gap-3 group">
+                       <p className="text-[10px] font-mono text-white/60 truncate">{AIRDROP_CONFIG.ADMIN_TON_ADDRESS}</p>
+                       <button 
+                         onClick={() => {
+                           navigator.clipboard.writeText(AIRDROP_CONFIG.ADMIN_TON_ADDRESS);
+                           WebApp.HapticFeedback.notificationOccurred('success');
+                         }}
+                         className="p-1.5 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
+                       >
+                          <Copy size={14} />
+                       </button>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="w-full flex flex-col gap-3">
+                 <div className="flex flex-col gap-2 items-start">
+                    <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest ml-1">Transaction Hash (TxID)</p>
+                    <input 
+                      type="text" 
+                      value={txHashInput}
+                      onChange={(e) => setTxHashInput(e.target.value)}
+                      placeholder="Paste your transaction hash here"
+                      className="w-full bg-black/40 border border-white/10 py-4 px-6 rounded-2xl text-[10px] font-mono text-white placeholder:opacity-20 outline-none focus:border-red-500/50 transition-all"
+                    />
+                 </div>
+
+                 <button 
+                   disabled={!txHashInput || isVerifying}
+                   onClick={async () => {
+                     setIsVerifying(true);
+                     await verifyWallet(txHashInput);
+                     setIsVerifying(false);
+                     setShowVerificationModal(false);
+                     setTxHashInput('');
+                     alert("Verification submitted! An admin will review your transaction shortly.");
+                   }}
+                   className="w-full bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl shadow-red-500/20 active:scale-[0.98] transition-all disabled:opacity-20"
+                 >
+                   {isVerifying ? 'SUBMITTING...' : 'SUBMIT FOR REVIEW'}
+                 </button>
+                 
+                 <button 
+                   onClick={() => setShowVerificationModal(false)}
+                   className="text-[10px] text-text-secondary uppercase font-bold tracking-widest hover:text-white transition-colors py-2"
+                 >
+                    Maybe Later
+                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Daily Reward Modal */}
       <AnimatePresence>
@@ -1246,7 +1407,7 @@ export default function App() {
                     { type: 'rechargeSpeed', name: 'Recharging Speed', icon: <Clock size={24} />, desc: 'Faster energy refill' }
                   ].map((boost) => {
                     const level = user?.boosts?.[boost.type as keyof typeof user.boosts] || 1;
-                    const cost = BOOST_COSTS[boost.type as keyof typeof BOOST_COSTS] * Math.pow(2.5, level - 1);
+                    const cost = BOOST_COSTS[boost.type as keyof typeof BOOST_COSTS] * Math.pow(3.0, level - 1);
                     const canAfford = (user?.coins || 0) >= cost;
 
                     return (

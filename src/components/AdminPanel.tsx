@@ -6,8 +6,8 @@ import { UserData } from '../types/game';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, BarChart3, List, Trash2, X, Menu, Search, LogOut, ChevronRight, Calendar, Lock, Mail, Zap, Wallet, Settings, Check, PlayCircle, Filter } from 'lucide-react';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
-import { setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
-import { MINE_CARDS } from '../lib/constants';
+import { setDoc, serverTimestamp, getDoc, updateDoc } from 'firebase/firestore';
+import { MINE_CARDS, AIRDROP_CONFIG } from '../lib/constants';
 
 export default function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -21,7 +21,7 @@ export default function AdminPanel() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'settings' | 'airdrop'>('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
@@ -39,6 +39,9 @@ export default function AdminPanel() {
   const [dailyComboCards, setDailyComboCards] = useState('');
   const [dailyComboReward, setDailyComboReward] = useState(5000000);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [airdropMessage, setAirdropMessage] = useState('Airdrop eligibility depends on total coins, passive profit, and referrals. Verify your wallet to be eligible.');
+  const [airdropStatus, setAirdropStatus] = useState<'paused' | 'active' | 'completed'>('paused');
+  const [calculatingScores, setCalculatingScores] = useState(false);
 
   const [newAdTitle, setNewAdTitle] = useState('');
   const [newAdReward, setNewAdReward] = useState(10000);
@@ -145,6 +148,57 @@ export default function AdminPanel() {
       setSavingSettings(false);
     }
   };
+  const calculateAirdropScores = async () => {
+    setCalculatingScores(true);
+    try {
+      if (!db) return;
+      
+      const batchSize = 50;
+      let processed = 0;
+      
+      for (let i = 0; i < users.length; i += batchSize) {
+        const chunk = users.slice(i, i + batchSize);
+        await Promise.all(chunk.map(async (u) => {
+          const passiveIncome = Object.values(u.mineCards || {}).reduce((acc, level, idx) => {
+             const card = MINE_CARDS.find(c => c.id === Object.keys(u.mineCards || {})[idx]);
+             if (!card) return acc;
+             return acc + (card.baseProfit * Math.pow(1.5, level - 1));
+          }, 0);
+
+          const score = Math.floor(
+            (u.totalCoins * AIRDROP_CONFIG.WEIGHTS.COINS) +
+            (passiveIncome * AIRDROP_CONFIG.WEIGHTS.PROFIT_PER_HOUR) +
+            ((u.referralCount || 0) * AIRDROP_CONFIG.WEIGHTS.REFERRALS)
+          );
+
+          await updateDoc(doc(db, 'users', u.uid), { airdropScore: score });
+          return score;
+        }));
+        processed += chunk.length;
+      }
+      
+      alert(`Successfully synchronized scores for ${processed} users.`);
+      fetchStats(); // Using fetchStats instead of fetchUsers as it probably re-triggers data load
+    } catch (err) {
+      console.error("Scoring failed:", err);
+      alert("Failed to calculate scores.");
+    } finally {
+      setCalculatingScores(false);
+    }
+  };
+
+  const approveVerification = async (userId: string) => {
+    if (!window.confirm("Mark this user as verified?")) return;
+    try {
+      if (!db) return;
+      await updateDoc(doc(db, 'users', userId), { isVerified: true });
+      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, isVerified: true } : u));
+      if (selectedUser?.uid === userId) setSelectedUser({ ...selectedUser, isVerified: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+    }
+  };
+
   const formatNumber = (num: number) => {
     if (num >= 1000000000) return (num / 1000000000).toFixed(2) + 'B';
     if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
@@ -316,6 +370,24 @@ export default function AdminPanel() {
     }
   };
 
+  const toggleUserBan = async (userId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'banned' ? 'active' : 'banned';
+    if (!window.confirm(`Are you sure you want to ${newStatus === 'banned' ? 'BAN' : 'UNBAN'} this user?`)) return;
+    
+    try {
+      if (!db) throw new Error("DB not initialized");
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, { status: newStatus });
+      setUsers(prev => prev.map(u => u.uid === userId ? { ...u, status: newStatus as any } : u));
+      if (selectedUser?.uid === userId) {
+        setSelectedUser({ ...selectedUser, status: newStatus as any });
+      }
+      alert(`User ${newStatus === 'banned' ? 'banned' : 'unbanned'} successfully.`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+    }
+  };
+
   const deleteUserAccount = async (userId: string) => {
     if (!window.confirm("Are you sure you want to delete this user? This cannot be undone.")) return;
     
@@ -409,6 +481,114 @@ export default function AdminPanel() {
                <div className="p-10 flex flex-col items-center justify-center text-center gap-4">
                   <BarChart3 size={60} className="text-white/10" />
                   <p className="text-text-secondary text-sm italic">User growth tracking is automatically generated based on registration logs.</p>
+               </div>
+            </div>
+          </div>
+        );
+      case 'airdrop':
+        const pendingVerifications = users.filter(u => u.verificationTxHash && !u.isVerified);
+        return (
+          <div className="flex flex-col gap-8 pb-20">
+            <header className="sticky top-0 z-[30] bg-[#0a0b0d] pt-6 pb-6 md:pt-10 flex justify-between items-end">
+              <div>
+                <h1 className="text-3xl font-black italic uppercase tracking-tighter">Airdrop Center</h1>
+                <p className="text-text-secondary italic">Manage verification and distribution</p>
+              </div>
+              <button 
+                onClick={calculateAirdropScores}
+                disabled={calculatingScores}
+                className="flex items-center gap-2 px-6 py-3 bg-accent-gold text-black rounded-xl font-black uppercase text-xs tracking-widest hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {calculatingScores ? <Calendar className="animate-spin" size={16} /> : <Zap size={16} />}
+                {calculatingScores ? 'Calculating...' : 'Recalculate Scores'}
+              </button>
+            </header>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+               {/* Verification Queue */}
+               <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between px-2">
+                    <h2 className="text-xs font-black uppercase tracking-widest text-text-secondary">Verification Queue</h2>
+                    <span className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{pendingVerifications.length}</span>
+                  </div>
+                  
+                  <div className="flex flex-col gap-3">
+                    {pendingVerifications.map(user => (
+                      <div key={user.uid} className="bg-card-bg p-5 rounded-2xl border border-white/5 flex flex-col gap-4">
+                         <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-3">
+                               <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center font-bold text-accent-gold">
+                                  {user.username?.charAt(0).toUpperCase()}
+                               </div>
+                               <div>
+                                  <p className="font-bold text-sm">{user.username}</p>
+                                  <p className="text-[10px] text-text-secondary font-mono">UID: {user.uid.slice(0, 10)}...</p>
+                               </div>
+                            </div>
+                            <div className="text-right">
+                               <p className="text-[10px] text-text-secondary uppercase font-black">Submitted</p>
+                               <p className="text-[10px] font-mono">{user.lastActive ? new Date(user.lastActive).toLocaleDateString() : 'Unknown'}</p>
+                            </div>
+                         </div>
+                         
+                         <div className="bg-black/20 p-3 rounded-xl border border-white/5">
+                            <p className="text-[8px] uppercase font-black text-text-secondary mb-1">Transaction Hash</p>
+                            <p className="text-[10px] font-mono break-all opacity-80">{user.verificationTxHash}</p>
+                         </div>
+
+                         <div className="flex gap-2">
+                            <button 
+                              onClick={() => approveVerification(user.uid)}
+                              className="flex-1 bg-green-500 text-black py-3 rounded-xl font-black uppercase text-[10px] tracking-widest"
+                            >
+                               Approve
+                            </button>
+                            <button className="px-5 border border-white/10 text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-widest opacity-50">
+                               Reject
+                            </button>
+                         </div>
+                      </div>
+                    ))}
+                    {pendingVerifications.length === 0 && (
+                      <div className="p-12 text-center text-text-secondary italic bg-white/5 rounded-3xl border border-dashed border-white/10">
+                         No pending verifications to process.
+                      </div>
+                    )}
+                  </div>
+               </div>
+
+               {/* Top Eligible Users */}
+               <div className="flex flex-col gap-4">
+                  <h2 className="text-xs font-black uppercase tracking-widest text-text-secondary px-2">Top Eligible Users</h2>
+                  <div className="bg-card-bg rounded-3xl border border-white/5 overflow-hidden">
+                     <table className="w-full text-left">
+                        <thead className="bg-white/5 text-[9px] font-black uppercase tracking-widest">
+                           <tr>
+                              <th className="p-4">User</th>
+                              <th className="p-4">Score</th>
+                              <th className="p-4">Status</th>
+                           </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                           {users
+                             .filter(u => (u.airdropScore || 0) > 0)
+                             .sort((a, b) => (b.airdropScore || 0) - (a.airdropScore || 0))
+                             .slice(0, 10)
+                             .map(user => (
+                              <tr key={user.uid}>
+                                 <td className="p-4 text-xs font-bold">{user.username}</td>
+                                 <td className="p-4 text-xs font-mono text-accent-gold">{user.airdropScore?.toLocaleString()}</td>
+                                 <td className="p-4">
+                                    {user.isVerified ? 
+                                       <span className="text-[8px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full font-black uppercase">Verified</span> :
+                                       <span className="text-[8px] bg-white/10 text-text-secondary px-2 py-0.5 rounded-full font-black uppercase">Pending</span>
+                                    }
+                                 </td>
+                              </tr>
+                           ))}
+                        </tbody>
+                     </table>
+                  </div>
                </div>
             </div>
           </div>
@@ -756,7 +936,9 @@ export default function AdminPanel() {
                            <span className="bg-white/10 px-3 py-1 rounded-full text-[10px] font-black">Level {user.level || 1}</span>
                          </td>
                          <td className="p-6">
-                           {user.lastActive && user.lastActive > Date.now() - 3600000 ? (
+                           {user.status === 'banned' ? (
+                             <span className="bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Banned</span>
+                           ) : user.lastActive && user.lastActive > Date.now() - 3600000 ? (
                              <span className="flex items-center gap-2 text-green-400 text-xs font-bold">
                                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" /> Online
                              </span>
@@ -905,6 +1087,12 @@ export default function AdminPanel() {
               >
                 <Settings size={20} /> App Settings
               </button>
+              <button 
+                onClick={() => { setActiveTab('airdrop'); setSidebarOpen(false); }}
+                className={`flex items-center gap-3 p-4 rounded-xl transition-all ${activeTab === 'airdrop' ? 'bg-accent-gold text-black font-bold' : 'text-text-secondary hover:bg-white/5'}`}
+              >
+                <Zap size={20} /> Airdrop Mgmt
+              </button>
             </nav>
 
             <div className="mt-auto pt-6 border-t border-white/10 flex flex-col gap-4">
@@ -1041,12 +1229,21 @@ export default function AdminPanel() {
 
                 <div className="flex flex-col gap-3">
                   <p className="text-[10px] text-text-secondary uppercase font-black px-1">Actions</p>
-                  <button 
-                    onClick={() => deleteUserAccount(selectedUser.uid)}
-                    className="flex items-center justify-center gap-2 bg-red-500/10 text-red-400 py-4 rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-red-500 transition-all hover:text-white"
-                  >
-                    <Trash2 size={16} /> Force Delete Account
-                  </button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      onClick={() => toggleUserBan(selectedUser.uid, selectedUser.status)}
+                      className={`flex items-center justify-center gap-2 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all ${selectedUser.status === 'banned' ? 'bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-black' : 'bg-orange-500/10 text-orange-400 hover:bg-orange-500 hover:text-black'}`}
+                    >
+                      {selectedUser.status === 'banned' ? <Check size={16} /> : <Trash2 size={16} />}
+                      {selectedUser.status === 'banned' ? 'Unban User' : 'Ban Account'}
+                    </button>
+                    <button 
+                      onClick={() => deleteUserAccount(selectedUser.uid)}
+                      className="flex items-center justify-center gap-2 bg-red-500/10 text-red-400 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-red-500 transition-all hover:text-white"
+                    >
+                      <Trash2 size={16} /> Delete Data
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>

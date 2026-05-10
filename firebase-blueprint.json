@@ -26,9 +26,14 @@
         "level": { "type": "number" },
         "boosts": { "type": "object" },
         "dailyCipher": { "type": "object" },
-        "dailyCombo": { "type": "object" }
+        "dailyCombo": { "type": "object" },
+        "status": { "type": "string", "enum": ["active", "banned"] },
+        "lastSync": { "type": "string", "format": "date-time" },
+        "isVerified": { "type": "boolean" },
+        "verificationTxHash": { "type": "string" },
+        "airdropScore": { "type": "number" }
       },
-      "required": ["uid", "telegramId", "coins", "energy", "referralCode"]
+      "required": ["uid", "telegramId", "coins", "energy", "referralCode", "status"]
     },
     "Settings": {
       "title": "Global Settings",

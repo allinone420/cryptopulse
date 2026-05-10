@@ -18,6 +18,12 @@ service cloud.firestore {
       );
     }
 
+    function isBanned() {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'banned';
+    }
+
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
 
@@ -28,43 +34,58 @@ service cloud.firestore {
       return data.uid is string && data.uid.size() <= 128 &&
              data.telegramId is number &&
              data.coins is number &&
+             data.totalCoins is number &&
              data.energy is number &&
              data.maxEnergy is number &&
              data.level is number &&
              data.referralCode is string &&
-             data.referralCode.size() <= 128;
+             data.referralCode.size() <= 128 &&
+             data.status in ['active', 'banned'] &&
+             (data.lastSync is timestamp || data.lastSync == null) &&
+             (data.isVerified is bool || !data.keys().contains('isVerified')) &&
+             (data.airdropScore is number || !data.keys().contains('airdropScore')) &&
+             (data.verificationTxHash is string || !data.keys().contains('verificationTxHash'));
     }
 
     match /users/{userId} {
-      allow get: if isSignedIn();
-      allow list: if isAdmin() || (isSignedIn() && (resource.data.uid == request.auth.uid || request.query.limit <= 100));
+      allow get: if isSignedIn() && !isBanned();
+      allow list: if isAdmin() || (isSignedIn() && !isBanned() && (resource.data.uid == request.auth.uid || request.query.limit <= 100));
       
       allow create: if isSignedIn() && 
                       isOwner(userId) && 
                       isValidId(userId) &&
                       isValidUser(incoming()) &&
-                      incoming().uid == request.auth.uid;
+                      incoming().uid == request.auth.uid &&
+                      incoming().status == 'active';
 
       allow update: if isSignedIn() && (
         isAdmin() || (
           isOwner(userId) && 
+          !isBanned() &&
           isValidUser(incoming()) &&
           // Immortals
           incoming().uid == existing().uid &&
           incoming().telegramId == existing().telegramId &&
           incoming().referralCode == existing().referralCode &&
+          // Anti-Cheat: Max coin gain per sync (e.g. 1M coins)
+          (incoming().coins <= existing().coins + 1000000) &&
+          // Rate Limiting: At least 1 second between updates
+          (request.time >= existing().lastSync + duration.value(1, 's')) &&
           // State transition integrity
           (
             // Action: Sync (Incremental updates to coins/energy)
-            incoming().diff(existing()).affectedKeys().hasAny(['coins', 'totalCoins', 'energy', 'lastActive', 'lastEnergyUpdate', 'lastPassiveIncomeUpdate', 'lastDailyReward', 'dailyStreak']) ||
+            incoming().diff(existing()).affectedKeys().hasAny(['coins', 'totalCoins', 'energy', 'lastActive', 'lastEnergyUpdate', 'lastPassiveIncomeUpdate', 'lastDailyReward', 'dailyStreak', 'lastSync']) ||
             // Action: Wallet Update
-            incoming().diff(existing()).affectedKeys().hasOnly(['walletAddress']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['walletAddress', 'lastSync']) ||
+            // Action: Submit Verification
+            incoming().diff(existing()).affectedKeys().hasOnly(['verificationTxHash', 'lastSync']) ||
             // Action: Level Up
-            (incoming().level == existing().level + 1 && incoming().diff(existing()).affectedKeys().hasAny(['level', 'maxEnergy', 'passiveIncomeRate', 'coins', 'energy']))
+            (incoming().level == existing().level + 1 && incoming().diff(existing()).affectedKeys().hasAny(['level', 'maxEnergy', 'passiveIncomeRate', 'coins', 'energy', 'lastSync']))
           )
         ) || (
           // Action: Referral Reward (Allow others to increment specific fields)
           isSignedIn() && 
+          !isBanned() &&
           incoming().diff(existing()).affectedKeys().hasOnly(['referralCount', 'coins', 'totalCoins']) &&
           incoming().referralCount == existing().referralCount + 1 &&
           incoming().coins > existing().coins

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import WebApp from '@twa-dev/sdk';
 import { auth, db } from '../lib/firebase';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, increment, getDocFromServer, query, collection, orderBy, limit, getDocs, where } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, getDocFromServer, query, collection, orderBy, limit, getDocs, where, serverTimestamp } from 'firebase/firestore';
 import { initTelegram, hapticFeedback } from '../lib/telegram';
 import { UserData } from '../types/game';
 import { INITIAL_ENERGY, ENERGY_REFILL_RATE, LEVELS, REFERRAL_REWARD_REFERRER, REFERRAL_REWARD_REFEREE, MINE_CARDS, MAX_CARD_LEVEL, BOOST_COSTS, DAILY_CIPHER_REWARD, DAILY_COMBO_REWARD, DAILY_REWARD_BASE, DAILY_REWARD_STEP } from '../lib/constants';
@@ -286,6 +286,10 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
               dailyStreak: 0,
               level: 1,
               mineCards: {},
+              status: 'active',
+              lastSync: serverTimestamp(),
+              isVerified: false,
+              airdropScore: 0,
               boosts: {
                 multiTap: 1,
                 energyLimit: 1,
@@ -466,7 +470,8 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
             boosts: user.boosts || null,
             dailyCipher: user.dailyCipher || null,
             dailyCombo: user.dailyCombo || null,
-            lastActive: Date.now()
+            lastActive: Date.now(),
+            lastSync: serverTimestamp()
           }),
           rewardReferrer()
         ]);
@@ -487,14 +492,13 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     setUser((prev) => {
       if (!prev) return prev;
       
-      const currentMaxEnergy = calculateMaxEnergy(prev.level, prev.boosts?.energyLimit || 1);
-      const tapCost = prev.boosts?.multiTap || 1;
+      const currentLevel = LEVELS.find(l => l.level === prev.level) || LEVELS[0];
+      const tapVal = currentLevel.tapValue * (prev.boosts?.multiTap || 1);
+      const tapCost = tapVal;
       
       if (Math.floor(prev.energy) < tapCost) return prev;
       
-      const currentLevel = LEVELS.find(l => l.level === prev.level) || LEVELS[0];
-      const tapVal = currentLevel.tapValue * (prev.boosts?.multiTap || 1);
-      
+      const currentMaxEnergy = calculateMaxEnergy(prev.level, prev.boosts?.energyLimit || 1);
       success = true;
       return {
         ...prev,
@@ -557,7 +561,7 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     const currentLevel = user.mineCards?.[cardId] || 0;
     if (currentLevel >= MAX_CARD_LEVEL) return;
 
-    const upgradeCost = Math.floor(card.baseCost * Math.pow(1.5, currentLevel));
+    const upgradeCost = Math.floor(card.baseCost * Math.pow(1.6, currentLevel));
     
     if (user.coins >= upgradeCost) {
       const newMineCards = { ...(user.mineCards || {}), [cardId]: currentLevel + 1 };
@@ -633,7 +637,7 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     if (!user) return;
     const currentBoosts = user.boosts || { multiTap: 1, energyLimit: 1, rechargeSpeed: 1, refillsToday: 0, lastFullRefill: 0 };
     const level = currentBoosts[type] || 1;
-    const cost = BOOST_COSTS[type] * Math.pow(2.5, level - 1);
+    const cost = BOOST_COSTS[type] * Math.pow(3.0, level - 1);
     
     if (user.coins >= cost) {
       const newBoosts = { ...currentBoosts, [type]: level + 1 };
@@ -809,9 +813,23 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
       console.error("Combo claim failed:", err);
     }
   }, [user, settings]);
+  
+  const verifyWallet = useCallback(async (txHash: string) => {
+    if (!user) return;
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        verificationTxHash: txHash,
+        lastSync: serverTimestamp()
+      });
+      setUser(prev => prev ? { ...prev, verificationTxHash: txHash } : null);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
+    }
+  }, [user]);
 
   return { 
     user, loading, syncing, tap, levelUp, buyCard, setUser, settings, myReferrals,
-    upgradeBoost, fullRefill, claimCipher, claimCombo, claimDailyReward
+    upgradeBoost, fullRefill, claimCipher, claimCombo, claimDailyReward, verifyWallet
   };
 };
