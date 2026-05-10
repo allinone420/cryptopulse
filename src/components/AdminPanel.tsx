@@ -532,8 +532,15 @@ export default function AdminPanel() {
                          </div>
                          
                          <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                            <p className="text-[8px] uppercase font-black text-text-secondary mb-1">Transaction Hash</p>
-                            <p className="text-[10px] font-mono break-all opacity-80">{user.verificationTxHash}</p>
+                            <p className="text-[8px] uppercase font-black text-text-secondary mb-1">
+                               {user.verificationTxHash?.startsWith('AUTO_TON_') ? 'System Linked Proof' : 'Manual Transaction Hash'}
+                            </p>
+                            <div className="flex items-center justify-between gap-2">
+                               <p className="text-[10px] font-mono break-all opacity-80 flex-1">{user.verificationTxHash}</p>
+                               {user.verificationTxHash?.startsWith('AUTO_TON_') && (
+                                 <div className="bg-accent-blue/10 text-accent-blue px-2 py-0.5 rounded text-[8px] font-black uppercase whitespace-nowrap">Auto-Detected</div>
+                               )}
+                            </div>
                          </div>
 
                          <div className="flex gap-2">

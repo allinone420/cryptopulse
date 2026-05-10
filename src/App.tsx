@@ -6,6 +6,8 @@ import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCirc
 import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAME, LEVELS, MINE_CARDS, MineCard, MAX_CARD_LEVEL, DAILY_CIPHER_REWARD, DAILY_COMBO_REWARD, BOOST_COSTS, AIRDROP_CONFIG } from './lib/constants';
 import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
+import { TonConnectButton, useTonConnectUI } from '@tonconnect/ui-react';
+import { TonConnect } from '@tonconnect/sdk';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { LeaderboardEntry, AdTask } from './types/game';
@@ -74,6 +76,7 @@ export default function App() {
   const [txHashInput, setTxHashInput] = useState('');
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [tonConnectUI] = useTonConnectUI();
   
   const [adCooldown, setAdCooldown] = useState(0);
   const [verifyingTask, setVerifyingTask] = useState<string | null>(null);
@@ -104,6 +107,50 @@ export default function App() {
       window.removeEventListener('hashchange', handlePathChange);
     };
   }, []);
+
+  const handleAirdropVerification = async () => {
+    if (!tonConnectUI.account) {
+      WebApp.HapticFeedback.notificationOccurred('error');
+      alert("Please connect your TON wallet first using the button at the top!");
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const transaction = {
+        validUntil: Math.floor(Date.now() / 1000) + 360, // 6 minutes
+        messages: [
+          {
+            address: AIRDROP_CONFIG.ADMIN_TON_ADDRESS,
+            amount: (0.1 * 1000000000).toString(), // 0.1 TON in nanotons
+          },
+        ],
+      };
+
+      const result = await tonConnectUI.sendTransaction(transaction);
+      
+      // Use the first 24 chars of BOC as a proof ID
+      const proofHash = result.boc.slice(0, 24); 
+      
+      await verifyWallet(`AUTO_TON_${proofHash}`, true);
+      
+      confetti({
+        particleCount: 200,
+        spread: 90,
+        origin: { y: 0.5 },
+        colors: ['#0088CC', '#f3ba2f', '#ffffff']
+      });
+      
+      setShowVerificationModal(false);
+      WebApp.HapticFeedback.notificationOccurred('success');
+      alert("Official Airdrop Verification Successful! Your score is now pending technical review.");
+    } catch (err) {
+      console.error("Verification failed:", err);
+      // alert("Transaction was not completed.");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   // Animated Coins State
   const coinsDisplay = useMotionValue(user?.coins || 0);
@@ -1139,67 +1186,63 @@ export default function App() {
               </div>
 
               <div>
-                <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter">Verify Identity</h2>
-                <p className="text-text-secondary text-xs mt-2 px-4 italic">To prevent bots and qualify for airdrop, a small verification transaction is required.</p>
+                <h2 className="text-2xl font-black italic text-white uppercase tracking-tighter">Identity Verification</h2>
+                <p className="text-text-secondary text-[11px] mt-2 px-4 italic leading-relaxed">To ensure an authentic distribution and filter out bot activity, an official on-chain transaction is required.</p>
               </div>
 
               <div className="w-full bg-black/40 rounded-3xl border border-white/5 p-5 flex flex-col gap-4">
-                 <div className="flex flex-col gap-1 items-start">
-                    <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest ml-1">Send Exactly</p>
-                    <div className="text-2xl font-black text-white flex items-center gap-2">
-                       {AIRDROP_CONFIG.MIN_TRANSACTION_AMOUNT} TON <Zap size={18} className="text-accent-blue" />
-                    </div>
-                 </div>
-                 
-                 <div className="h-px bg-white/5" />
-
-                 <div className="flex flex-col gap-2 items-start">
-                    <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest ml-1">To Address</p>
-                    <div className="w-full bg-white/5 p-3 rounded-xl border border-dashed border-white/10 flex items-center justify-between gap-3 group">
-                       <p className="text-[10px] font-mono text-white/60 truncate">{AIRDROP_CONFIG.ADMIN_TON_ADDRESS}</p>
-                       <button 
-                         onClick={() => {
-                           navigator.clipboard.writeText(AIRDROP_CONFIG.ADMIN_TON_ADDRESS);
-                           WebApp.HapticFeedback.notificationOccurred('success');
-                         }}
-                         className="p-1.5 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
-                       >
-                          <Copy size={14} />
-                       </button>
-                    </div>
-                 </div>
+                 {!tonConnectUI.account ? (
+                   <div className="flex flex-col gap-4 items-center">
+                      <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest leading-none">Wallet Required</p>
+                      <TonConnectButton />
+                      <p className="text-[9px] text-zinc-500 italic">Connect your TON wallet to use the automatic verification system.</p>
+                   </div>
+                 ) : (
+                   <>
+                     <div className="flex justify-between items-center text-left">
+                        <div>
+                          <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest leading-none mb-1">Method</p>
+                          <p className="text-accent-blue font-bold text-xs flex items-center gap-1">Automated TON Pay</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest leading-none mb-1">Fee</p>
+                          <p className="text-white font-black text-xs">0.1 TON</p>
+                        </div>
+                     </div>
+                     <div className="h-px bg-white/5" />
+                     <div className="flex flex-col gap-2 items-start">
+                        <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest ml-1">Current Wallet</p>
+                        <div className="w-full bg-white/5 p-3 rounded-xl border border-white/10 flex items-center justify-between gap-3 group">
+                           <p className="text-[10px] font-mono text-white/60 truncate italic">{tonConnectUI.account.address}</p>
+                           <CheckCircle2 size={14} className="text-green-400" />
+                        </div>
+                     </div>
+                   </>
+                 )}
               </div>
 
               <div className="w-full flex flex-col gap-3">
-                 <div className="flex flex-col gap-2 items-start">
-                    <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest ml-1">Transaction Hash (TxID)</p>
-                    <input 
-                      type="text" 
-                      value={txHashInput}
-                      onChange={(e) => setTxHashInput(e.target.value)}
-                      placeholder="Paste your transaction hash here"
-                      className="w-full bg-black/40 border border-white/10 py-4 px-6 rounded-2xl text-[10px] font-mono text-white placeholder:opacity-20 outline-none focus:border-red-500/50 transition-all"
-                    />
-                 </div>
+                 <button 
+                   disabled={!tonConnectUI.account || isVerifying}
+                   onClick={handleAirdropVerification}
+                   className="w-full bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl shadow-red-500/20 active:scale-[0.98] transition-all disabled:opacity-20 flex items-center justify-center gap-2"
+                 >
+                   {isVerifying ? (
+                     <>
+                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                       VERIFYING...
+                     </>
+                   ) : (
+                     <>
+                       <Zap size={18} fill="currentColor" />
+                       Verify Account Now
+                     </>
+                   )}
+                 </button>
 
                  <button 
-                   disabled={!txHashInput || isVerifying}
-                   onClick={async () => {
-                     setIsVerifying(true);
-                     await verifyWallet(txHashInput);
-                     setIsVerifying(false);
-                     setShowVerificationModal(false);
-                     setTxHashInput('');
-                     alert("Verification submitted! An admin will review your transaction shortly.");
-                   }}
-                   className="w-full bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl shadow-red-500/20 active:scale-[0.98] transition-all disabled:opacity-20"
-                 >
-                   {isVerifying ? 'SUBMITTING...' : 'SUBMIT FOR REVIEW'}
-                 </button>
-                 
-                 <button 
                    onClick={() => setShowVerificationModal(false)}
-                   className="text-[10px] text-text-secondary uppercase font-bold tracking-widest hover:text-white transition-colors py-2"
+                   className="text-[10px] text-text-secondary uppercase font-bold tracking-widest hover:text-white transition-colors py-2 mt-2"
                  >
                     Maybe Later
                  </button>

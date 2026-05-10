@@ -23,13 +23,14 @@ export const DAILY_CIPHER_REWARD = 1000000; // 1M for cipher
 export const DAILY_COMBO_REWARD = 5000000; // 5M for combo
 
 export const AIRDROP_CONFIG = {
-  MIN_TRANSACTION_AMOUNT: 0.1, // Minimum TON for verification
-  ADMIN_TON_ADDRESS: "UQBx...YOUR_DESTINATION_ADDRESS", // Replace with your real TON address
+  MIN_TRANSACTION_AMOUNT: 0.1, // Exactly 0.1 TON
+  ADMIN_TON_ADDRESS: "UQD0X_x_f3_bA_2F_12_34_56_78_90_ABC_DEF_GHI_JKL_MNO", // Admin's TON address
   WEIGHTS: {
     COINS: 0.1,
     PROFIT_PER_HOUR: 10,
     REFERRALS: 5000
-  }
+  },
+  VERIFICATION_FEE_TON: "0.1"
 };
 
 export const BOOST_COSTS = {

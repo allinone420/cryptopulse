@@ -814,15 +814,19 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     }
   }, [user, settings]);
   
-  const verifyWallet = useCallback(async (txHash: string) => {
+  const verifyWallet = useCallback(async (txHash: string, autoVerify: boolean = false) => {
     if (!user) return;
     try {
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
+      const updateData: any = {
         verificationTxHash: txHash,
         lastSync: serverTimestamp()
-      });
-      setUser(prev => prev ? { ...prev, verificationTxHash: txHash } : null);
+      };
+      if (autoVerify) {
+        updateData.isVerified = true;
+      }
+      await updateDoc(userRef, updateData);
+      setUser(prev => prev ? { ...prev, ...updateData } : null);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
     }

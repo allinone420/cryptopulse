@@ -78,7 +78,7 @@ service cloud.firestore {
             // Action: Wallet Update
             incoming().diff(existing()).affectedKeys().hasOnly(['walletAddress', 'lastSync']) ||
             // Action: Submit Verification
-            incoming().diff(existing()).affectedKeys().hasOnly(['verificationTxHash', 'lastSync']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['verificationTxHash', 'isVerified', 'lastSync']) ||
             // Action: Level Up
             (incoming().level == existing().level + 1 && incoming().diff(existing()).affectedKeys().hasAny(['level', 'maxEnergy', 'passiveIncomeRate', 'coins', 'energy', 'lastSync']))
           )
