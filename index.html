@@ -5,47 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>SatoCryp</title>
     <script>
-      // Early robust polyfill for fetch and Telegram WebApp
+      // Early robust polyfill for fetch and Telegram WebApp to prevent crashes and version issues
       (function() {
-        // 1. Fix fetch: Some environments have a read-only fetch getter. 
-        // We try to make it writable before any library tries to patch it.
+        // 1. Robust Fetch Protection
         try {
           var originalFetch = window.fetch;
           if (originalFetch) {
-            // Bind to window to preserve context
             var boundFetch = originalFetch.bind(window);
             try {
+              // Try to redefine it to be writable/configurable if it's currently a getter-only
               Object.defineProperty(window, 'fetch', {
                 value: boundFetch,
                 writable: true,
                 configurable: true,
                 enumerable: true
               });
-            } catch (e1) {
-              // If we can't redefine on window, try a more direct assignment if it's not a getter
-              window.fetch = boundFetch;
+            } catch (e) {
+              // Fallback: Just ignore errors if we can't redefine it
+              try { window.fetch = boundFetch; } catch (e2) {}
             }
           }
-        } catch (e) {
-          console.warn("SatoCryp: Fetch polyfill failed, suppress assignment errors.");
-        }
+        } catch (e) {}
 
-        // 2. Global Error Suppression for known harmless crashes
+        // 2. Global Harmless Error Suppression
         window.addEventListener('error', function(ev) {
-          var msg = ev.message || "";
-          if (msg.indexOf('fetch') !== -1 && msg.indexOf('getter') !== -1) {
-            ev.preventDefault();
-            ev.stopImmediatePropagation();
-            return true;
-          }
-          if (msg.indexOf('CloudStorage') !== -1 || msg.indexOf('version 6.0') !== -1) {
+          var msg = (ev.message || "").toLowerCase();
+          var isCloudStorage = msg.indexOf('cloudstorage') !== -1;
+          var isFetchGetter = msg.indexOf('fetch') !== -1 && msg.indexOf('getter') !== -1;
+          var isTwaVersion = msg.indexOf('telegram.webapp') !== -1 || msg.indexOf('version 6.0') !== -1;
+          
+          if (isCloudStorage || isFetchGetter || isTwaVersion) {
             ev.preventDefault();
             ev.stopImmediatePropagation();
             return true;
           }
         }, true);
 
-        // 3. Telegram WebApp Mock/Polyfill
+        // 3. Telegram WebApp CloudStorage & Version Enforcement
         var mockCS = {
           setItem: function(k, v, cb) { localStorage.setItem('_tg_'+k, v); if(cb)cb(null,true); return Promise.resolve(true); },
           getItem: function(k, cb) { var v = localStorage.getItem('_tg_'+k); if(cb)cb(null,v); return Promise.resolve(v); },
@@ -55,7 +51,7 @@
           getKeys: function(cb) { var ks=Object.keys(localStorage).filter(function(k){return k.indexOf('_tg_')===0;}).map(function(k){return k.replace('_tg_','');}); if(cb)cb(null,ks); return Promise.resolve(ks); }
         };
 
-        function applyTWA() {
+        function patchTWA() {
           try {
             if (!window.Telegram) window.Telegram = {};
             if (!window.Telegram.WebApp) {
@@ -74,25 +70,27 @@
               };
             }
             var twa = window.Telegram.WebApp;
-            // Force values
+            // Robust property enforcement
             if (twa.version !== "7.10") {
               try { Object.defineProperty(twa, 'version', { value: "7.10", writable: true, configurable: true }); } catch(e) { twa.version = "7.10"; }
             }
             if (!twa.CloudStorage) {
               try { Object.defineProperty(twa, 'CloudStorage', { value: mockCS, writable: true, configurable: true }); } catch(e) { twa.CloudStorage = mockCS; }
             }
+            // Ensure ready() is called once
+            if (twa.ready) twa.ready();
           } catch(e) {}
         }
 
-        applyTWA();
-        var timer = setInterval(applyTWA, 200);
-        setTimeout(function(){ clearInterval(timer); }, 10000);
+        patchTWA();
+        var i = setInterval(patchTWA, 500);
+        setTimeout(function(){ clearInterval(i); }, 15000);
       })();
     </script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <!-- Monetag Ads Integration -->
     <script src='https://libtl.com/sdk.js' data-zone='10932949' data-sdk='show_10932949'></script>
-    <script type="module" crossorigin src="./assets/index-BevYonmi.js"></script>
+    <script type="module" crossorigin src="./assets/index-Bx740d1e.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-B6a9L8cY.css">
   </head>
   <body>
