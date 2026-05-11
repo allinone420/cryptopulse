@@ -123,7 +123,6 @@ export default function App() {
           {
             address: AIRDROP_CONFIG.ADMIN_TON_ADDRESS,
             amount: "100000000", // Exactly 0.1 TON in nanotons
-            payload: "" // Optional empty payload to satisfy some wallets
           },
         ],
       };
