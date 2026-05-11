@@ -5,7 +5,8 @@ import App from './App.tsx';
 import './index.css';
 import './lib/wallet'; // Initialize web3modal (optional fallback)
 
-const manifestUrl = `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}/tonconnect-manifest.json`;
+// Fallback to absolute URL with cache breaker to ensure fresh manifest fetch
+const manifestUrl = `${window.location.origin}/tonconnect-manifest.json?v=${Date.now()}`;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
