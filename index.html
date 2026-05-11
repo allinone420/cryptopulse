@@ -5,40 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>SatoCryp</title>
     <script>
-      // Aggressive Silencing and Polyfill for Telegram WebApp SDK
+      // Early robust polyfill for fetch and Telegram WebApp
       (function() {
-        var originalLog = console.log;
-        var originalWarn = console.warn;
-        var originalError = console.error;
-
-        var silence = function(original, args) {
-          try {
-            var message = "";
-            for (var i = 0; i < args.length; i++) {
-              var arg = args[i];
-              if (typeof arg === 'string') message += arg + " ";
-              else if (arg && arg.message) message += arg.message + " ";
-              else {
-                try { message += JSON.stringify(arg) + " "; } catch(e) {}
-              }
+        // 1. Fix fetch: Some environments have a read-only fetch getter. 
+        // We try to make it writable before any library tries to patch it.
+        try {
+          var originalFetch = window.fetch;
+          if (originalFetch) {
+            // Bind to window to preserve context
+            var boundFetch = originalFetch.bind(window);
+            try {
+              Object.defineProperty(window, 'fetch', {
+                value: boundFetch,
+                writable: true,
+                configurable: true,
+                enumerable: true
+              });
+            } catch (e1) {
+              // If we can't redefine on window, try a more direct assignment if it's not a getter
+              window.fetch = boundFetch;
             }
-            // Block anything related to Telegram WebApp 6.0 warnings or CloudStorage missing errors
-            if (message.indexOf('CloudStorage') !== -1 || 
-                message.indexOf('Telegram.WebApp') !== -1 ||
-                message.indexOf('version 6.0') !== -1 ||
-                message.indexOf('deprecated') !== -1) {
-              return;
-            }
-          } catch (e) {}
-          return original.apply(console, args);
-        };
+          }
+        } catch (e) {
+          console.warn("SatoCryp: Fetch polyfill failed, suppress assignment errors.");
+        }
 
-        console.log = function() { silence(originalLog, arguments); };
-        console.warn = function() { silence(originalWarn, arguments); };
-        console.error = function() { silence(originalError, arguments); };
+        // 2. Global Error Suppression for known harmless crashes
+        window.addEventListener('error', function(ev) {
+          var msg = ev.message || "";
+          if (msg.indexOf('fetch') !== -1 && msg.indexOf('getter') !== -1) {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            return true;
+          }
+          if (msg.indexOf('CloudStorage') !== -1 || msg.indexOf('version 6.0') !== -1) {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
 
-        // Define the robust mock
-        var mockCloudStorage = {
+        // 3. Telegram WebApp Mock/Polyfill
+        var mockCS = {
           setItem: function(k, v, cb) { localStorage.setItem('_tg_'+k, v); if(cb)cb(null,true); return Promise.resolve(true); },
           getItem: function(k, cb) { var v = localStorage.getItem('_tg_'+k); if(cb)cb(null,v); return Promise.resolve(v); },
           getItems: function(ks, cb) { var r={}; ks.forEach(function(k){ r[k]=localStorage.getItem('_tg_'+k); }); if(cb)cb(null,r); return Promise.resolve(r); },
@@ -47,116 +55,44 @@
           getKeys: function(cb) { var ks=Object.keys(localStorage).filter(function(k){return k.indexOf('_tg_')===0;}).map(function(k){return k.replace('_tg_','');}); if(cb)cb(null,ks); return Promise.resolve(ks); }
         };
 
-        var webAppMock = {
-          initData: "user=%7B%22id%22%3A123%2C%22first_name%22%3A%22Preview%22%2C%22last_name%22%3A%22User%22%2C%22username%22%3A%22previewuser%22%2C%22language_code%22%3A%22en%22%7D&hash=mockhash",
-          initDataUnsafe: { user: { id: 123, first_name: "Preview", last_name: "User", username: "previewuser" } },
-          version: "7.0",
-          platform: "unknown",
-          colorScheme: "dark",
-          themeParams: { bg_color: "#0a0b0d", text_color: "#ffffff", hint_color: "#707579", link_color: "#2481cc", button_color: "#2481cc", button_text_color: "#ffffff" },
-          isExpanded: true,
-          viewportHeight: 600,
-          viewportStableHeight: 600,
-          headerColor: "#000000",
-          backgroundColor: "#000000",
-          isClosingConfirmationEnabled: false,
-          BackButton: { isVisible: false, onClick: function(){}, offClick: function(){}, show: function(){}, hide: function(){} },
-          MainButton: { text: "CONTINUE", color: "#2481cc", textColor: "#ffffff", isVisible: false, isActive: true, isProgressVisible: false, onClick: function(){}, offClick: function(){}, show: function(){}, hide: function(){}, enable: function(){}, disable: function(){}, showProgress: function(){}, hideProgress: function(){}, setText: function(){}, setParams: function(){} },
-          HapticFeedback: { impactOccurred: function(){}, notificationOccurred: function(){}, selectionChanged: function(){} },
-          CloudStorage: mockCloudStorage,
-          ready: function(){},
-          expand: function(){},
-          close: function(){},
-          showAlert: function(s, cb){ alert(s); if(cb)cb(); },
-          showConfirm: function(s, cb){ var r = confirm(s); if(cb)cb(r); },
-          showScanQrPopup: function(p, cb){ if(cb)cb("MOCKED_QR"); },
-          closeScanQrPopup: function(){},
-          readTextFromClipboard: function(cb){ if(cb)cb("MOCKED_CLIPBOARD"); },
-          requestWriteAccess: function(cb){ if(cb)cb(true); },
-          requestContact: function(cb){ if(cb)cb(true); },
-          switchInlineQuery: function(){},
-          openLink: function(l){ window.open(l, '_blank'); },
-          openTelegramLink: function(l){ window.open(l, '_blank'); },
-          openInvoice: function(i, cb){ if(cb)cb("paid"); },
-          setHeaderColor: function(){},
-          setBackgroundColor: function(){},
-          enableClosingConfirmation: function(){},
-          disableClosingConfirmation: function(){},
-          onEvent: function(){},
-          offEvent: function(){},
-          sendData: function(){}
-        };
-
-        // Ensure window.Telegram.WebApp is sticky
-        if (!window.Telegram) {
-          Object.defineProperty(window, 'Telegram', {
-            value: { WebApp: webAppMock },
-            writable: true,
-            configurable: true
-          });
-        } else if (!window.Telegram.WebApp) {
-          window.Telegram.WebApp = webAppMock;
-        }
-
-        window.addEventListener('error', function(e) {
-          if (e.message && (e.message.indexOf('CloudStorage') !== -1 || e.message.indexOf('Telegram.WebApp') !== -1)) {
-            e.preventDefault();
-            return true;
-          }
-        }, true);
-
-        function doPolyfill() {
+        function applyTWA() {
           try {
-            var twa = window.Telegram ? window.Telegram.WebApp : null;
-            if (twa) {
-               // Enforce version 7.0 and CloudStorage mock
-               if (twa.version !== '7.0') {
-                 try {
-                   Object.defineProperty(twa, 'version', { value: '7.0', writable: true, configurable: true });
-                 } catch(e) { twa.version = '7.0'; }
-               }
-               if (!twa.CloudStorage) {
-                 try {
-                   Object.defineProperty(twa, 'CloudStorage', { value: mockCloudStorage, writable: true, configurable: true });
-                 } catch(e) { twa.CloudStorage = mockCloudStorage; }
-               }
-               // Also polyfill any missing essential methods
-               if (!twa.ready) twa.ready = function(){};
-               if (!twa.expand) twa.expand = function(){};
+            if (!window.Telegram) window.Telegram = {};
+            if (!window.Telegram.WebApp) {
+              window.Telegram.WebApp = {
+                version: "7.10",
+                platform: "unknown",
+                initData: "",
+                initDataUnsafe: {},
+                ready: function(){},
+                expand: function(){},
+                close: function(){},
+                HapticFeedback: { impactOccurred: function(){}, notificationOccurred: function(){}, selectionChanged: function(){} },
+                MainButton: { show: function(){}, hide: function(){}, setText: function(){}, onClick: function(){}, offClick: function(){}, showProgress: function(){}, hideProgress: function(){} },
+                BackButton: { show: function(){}, hide: function(){}, onClick: function(){}, offClick: function(){} },
+                CloudStorage: mockCS
+              };
+            }
+            var twa = window.Telegram.WebApp;
+            // Force values
+            if (twa.version !== "7.10") {
+              try { Object.defineProperty(twa, 'version', { value: "7.10", writable: true, configurable: true }); } catch(e) { twa.version = "7.10"; }
+            }
+            if (!twa.CloudStorage) {
+              try { Object.defineProperty(twa, 'CloudStorage', { value: mockCS, writable: true, configurable: true }); } catch(e) { twa.CloudStorage = mockCS; }
             }
           } catch(e) {}
         }
 
-        var timer = setInterval(doPolyfill, 5);
-        setTimeout(function() { clearInterval(timer); }, 15000);
-        
-        window.addEventListener('load', doPolyfill);
-        document.addEventListener('DOMContentLoaded', doPolyfill);
-      })();
-    </script>
-    <script>
-      // Fix for "Cannot set property fetch" error in some sandboxed environments
-      (function() {
-        try {
-          if (typeof window.fetch === 'function') {
-            const desc = Object.getOwnPropertyDescriptor(window, 'fetch');
-            if (desc && !desc.set && desc.configurable) {
-              const originalFetch = window.fetch;
-              Object.defineProperty(window, 'fetch', {
-                get: function() { return originalFetch; },
-                set: function() { /* ignore or handle */ },
-                configurable: true,
-                enumerable: true
-              });
-            }
-          }
-        } catch (e) {}
+        applyTWA();
+        var timer = setInterval(applyTWA, 200);
+        setTimeout(function(){ clearInterval(timer); }, 10000);
       })();
     </script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <!-- Monetag Ads Integration -->
     <script src='https://libtl.com/sdk.js' data-zone='10932949' data-sdk='show_10932949'></script>
-    <script type="module" crossorigin src="./assets/index-C2_EVsAJ.js"></script>
+    <script type="module" crossorigin src="./assets/index-BevYonmi.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-B6a9L8cY.css">
   </head>
   <body>
