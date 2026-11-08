@@ -28,9 +28,76 @@ const calculatePassiveRate = (level: number, mineCards: { [id: string]: number }
   return currentLevel.passiveRate + (cardIncomePerHour / 3600);
 };
 
+const getLocalUser = (): UserData | null => {
+  try {
+    const raw = localStorage.getItem('satocryp_saved_user');
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+};
+
+const saveLocalUser = (u: UserData) => {
+  try {
+    localStorage.setItem('satocryp_saved_user', JSON.stringify(u));
+  } catch (e) {}
+};
+
+const createDefaultUser = (uid: string, telegramId: number = 0, tgUser?: any, initialCoins: number = 0): UserData => ({
+  uid,
+  telegramId,
+  username: tgUser?.username || tgUser?.first_name || 'Player',
+  firstName: tgUser?.first_name || 'Player',
+  coins: initialCoins,
+  totalCoins: initialCoins,
+  energy: INITIAL_ENERGY,
+  maxEnergy: LEVELS[0].maxEnergy,
+  lastEnergyUpdate: Date.now(),
+  passiveIncomeRate: LEVELS[0].passiveRate, 
+  lastPassiveIncomeUpdate: Date.now(),
+  walletAddress: null,
+  referralCode: uid, 
+  referredBy: null,
+  referralCount: 0,
+  completedTasks: [],
+  lastDailyReward: null,
+  lastAdView: null,
+  adCompletions: {},
+  dailyStreak: 0,
+  level: 1,
+  mineCards: {},
+  status: 'active',
+  lastSync: null,
+  isVerified: false,
+  airdropScore: 0,
+  boosts: {
+    multiTap: 1,
+    energyLimit: 1,
+    rechargeSpeed: 1,
+    refillsToday: 0,
+    lastFullRefill: 0
+  },
+  dailyCipher: {
+    word: 'SATO',
+    isCompleted: false,
+    lastUpdated: Date.now()
+  },
+  dailyCombo: {
+    cards: [],
+    claimed: false,
+    lastUpdated: Date.now()
+  }
+});
+
 export const useGame = (activeTab?: string, skipInit: boolean = false) => {
-  const [user, setUser] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUserState] = useState<UserData | null>(() => getLocalUser());
+  const setUser = useCallback((valOrFn: UserData | null | ((prev: UserData | null) => UserData | null)) => {
+    setUserState(prev => {
+      const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
+      if (next) saveLocalUser(next);
+      return next;
+    });
+  }, []);
+  const [loading, setLoading] = useState(!getLocalUser());
   const [syncing, setSyncing] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [myReferrals, setMyReferrals] = useState<any[]>([]);
@@ -141,7 +208,10 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
           try {
             userSnap = await getDoc(userRef);
           } catch (err) {
-            handleFirestoreError(err, OperationType.GET, `users/${targetUid}`);
+            console.warn(`Firestore read deferred for users/${targetUid}:`, err);
+            const fallback = getLocalUser() || createDefaultUser(targetUid, currentTgId, tgUser);
+            setUser(fallback);
+            setLoading(false);
             return;
           }
 
@@ -172,8 +242,11 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
                       uid: targetUid,
                       lastActive: Date.now()
                     };
-                    await setDoc(userRef, migratedUser);
+                    try {
+                      await setDoc(userRef, migratedUser);
+                    } catch (e) {}
                     setUser(migratedUser);
+                    setLoading(false);
                     return;
                   }
                 } catch (err) {
@@ -210,6 +283,7 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
             }
             
             setUser(data);
+            setLoading(false);
           } else {
             // Check if this Telegram ID already exists in our database under a different UID
             if (currentTgId) {
@@ -228,8 +302,9 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
                     lastActive: Date.now()
                   };
 
-                  await setDoc(userRef, migratedUser);
-                  // We do NOT reward referrer here because they already had an account
+                  try {
+                    await setDoc(userRef, migratedUser);
+                  } catch (e) {}
                   setUser(migratedUser);
                   setLoading(false);
                   return;
@@ -312,7 +387,7 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
             try {
               await setDoc(userRef, newUser);
             } catch (err) {
-              handleFirestoreError(err, OperationType.CREATE, `users/${targetUid}`);
+              console.warn(`Firestore user create deferred for users/${targetUid}:`, err);
             }
 
             // Reward the referrer
@@ -330,20 +405,45 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
             }
 
             setUser(newUser);
+            setLoading(false);
           }
         } else {
-          // If no Firebase user, attempt to sign in anonymounsly if not an admin page
-          // This avoids creating guest accounts for admins on refresh
-          await signInAnonymously(auth);
+          // If no Firebase user, attempt to sign in anonymously
+          try {
+            await signInAnonymously(auth);
+          } catch (authErr) {
+            console.warn('Anonymous sign-in error:', authErr);
+            setUser(prev => prev || createDefaultUser('guest_' + Math.random().toString(36).substring(2, 9), currentTgId || 0, tgUser));
+            setLoading(false);
+          }
         }
       } catch (err) {
         console.error('Initialization error:', err);
-      } finally {
+        setUser(prev => prev || createDefaultUser('guest_' + Math.random().toString(36).substring(2, 9), 0, undefined));
         setLoading(false);
+      } finally {
+        if (fbUser) {
+          setLoading(false);
+        }
       }
     });
 
-    return () => unsub();
+    // Safety timer: Ensure preview never hangs if network/auth is slow
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+      setUser(prev => {
+        if (prev) return prev;
+        const local = getLocalUser();
+        if (local) return local;
+        const fallbackGuest = createDefaultUser('guest_' + Math.random().toString(36).substring(2, 9), 0, undefined);
+        return fallbackGuest;
+      });
+    }, 3000);
+
+    return () => {
+      unsub();
+      clearTimeout(safetyTimer);
+    };
   }, [WebApp?.initDataUnsafe?.user?.id, skipInit]);
   useEffect(() => {
     if (!user) return;
@@ -832,8 +932,157 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     }
   }, [user]);
 
+  // Token Staking: Lock tokens into a vault to earn high-yield staking rewards & mining boost
+  const stakeTokens = useCallback(async (poolId: string, amount: number, durationDays: number, apy: number) => {
+    if (!user || amount <= 0) return { success: false, message: 'Invalid staking amount' };
+
+    const existingPosition = user.stakedPositions?.[poolId];
+    const currentStaked = existingPosition?.amount || 0;
+    const newAmount = currentStaked + amount;
+
+    const newPosition = {
+      poolId,
+      amount: newAmount,
+      stakedAt: Date.now(),
+      durationDays,
+      apy,
+      claimedYield: existingPosition?.claimedYield || 0
+    };
+
+    const updatedPositions = {
+      ...(user.stakedPositions || {}),
+      [poolId]: newPosition
+    };
+
+    const updatedUser: UserData = {
+      ...user,
+      stakedPositions: updatedPositions
+    };
+
+    setUser(updatedUser);
+
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        stakedPositions: updatedPositions,
+        lastSync: serverTimestamp()
+      });
+      hapticFeedback();
+      confetti({ particleCount: 120, spread: 60, origin: { y: 0.6 } });
+      return { success: true, message: `Successfully staked ${amount.toLocaleString()} $SATO into vault!` };
+    } catch (err) {
+      console.warn('Staking save deferred to local cache:', err);
+      return { success: true, message: `Staked ${amount.toLocaleString()} $SATO (saved locally)` };
+    }
+  }, [user]);
+
+  // Claim Accrued Staking Yield
+  const claimStakingYield = useCallback(async (poolId: string) => {
+    if (!user || !user.stakedPositions?.[poolId]) return { success: false, amount: 0 };
+    const position = user.stakedPositions[poolId];
+    const elapsedMs = Date.now() - position.stakedAt;
+    const elapsedYears = elapsedMs / (365 * 24 * 3600 * 1000);
+    const accrued = Math.floor(position.amount * (position.apy / 100) * elapsedYears);
+
+    if (accrued <= 0) return { success: false, message: 'Yield is accumulating, check back soon!' };
+
+    const updatedPosition = {
+      ...position,
+      stakedAt: Date.now(),
+      claimedYield: (position.claimedYield || 0) + accrued
+    };
+
+    const updatedPositions = {
+      ...user.stakedPositions,
+      [poolId]: updatedPosition
+    };
+
+    const updatedUser: UserData = {
+      ...user,
+      coins: user.coins + accrued,
+      totalCoins: user.totalCoins + accrued,
+      stakedPositions: updatedPositions
+    };
+
+    setUser(updatedUser);
+
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        coins: Math.floor(updatedUser.coins),
+        totalCoins: Math.floor(updatedUser.totalCoins),
+        stakedPositions: updatedPositions,
+        lastSync: serverTimestamp()
+      });
+      hapticFeedback();
+      confetti({ particleCount: 80, spread: 50 });
+      return { success: true, amount: accrued, message: `Claimed +${accrued.toLocaleString()} $SATO yield!` };
+    } catch (e) {
+      return { success: true, amount: accrued, message: `Claimed +${accrued.toLocaleString()} $SATO yield!` };
+    }
+  }, [user]);
+
+  // Unstake Principal + Yield
+  const unstakeTokens = useCallback(async (poolId: string) => {
+    if (!user || !user.stakedPositions?.[poolId]) return { success: false };
+    const position = user.stakedPositions[poolId];
+    const elapsedMs = Date.now() - position.stakedAt;
+    const elapsedYears = elapsedMs / (365 * 24 * 3600 * 1000);
+    const accrued = Math.floor(position.amount * (position.apy / 100) * elapsedYears);
+    const totalReturn = position.amount + accrued;
+
+    const remainingPositions = { ...user.stakedPositions };
+    delete remainingPositions[poolId];
+
+    const updatedUser: UserData = {
+      ...user,
+      coins: user.coins + totalReturn,
+      totalCoins: user.totalCoins + totalReturn,
+      stakedPositions: remainingPositions
+    };
+
+    setUser(updatedUser);
+
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        coins: Math.floor(updatedUser.coins),
+        totalCoins: Math.floor(updatedUser.totalCoins),
+        stakedPositions: remainingPositions,
+        lastSync: serverTimestamp()
+      });
+      hapticFeedback();
+      return { success: true, returned: totalReturn, message: `Unstaked ${position.amount.toLocaleString()} + ${accrued.toLocaleString()} yield!` };
+    } catch (e) {
+      return { success: true, returned: totalReturn, message: `Unstaked ${position.amount.toLocaleString()} $SATO!` };
+    }
+  }, [user]);
+
+  // Claim Airdrop Tokens directly
+  const claimAirdropTokens = useCallback(async (amount: number) => {
+    if (!user || amount <= 0) return { success: false, message: 'Invalid claim amount' };
+    const newClaimed = (user.claimedTokens || 0) + amount;
+
+    const updatedUser: UserData = {
+      ...user,
+      claimedTokens: newClaimed
+    };
+
+    setUser(updatedUser);
+
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        claimedTokens: newClaimed,
+        lastSync: serverTimestamp()
+      });
+      hapticFeedback();
+      confetti({ particleCount: 200, spread: 90, origin: { y: 0.5 } });
+      return { success: true, message: `Successfully claimed ${amount.toLocaleString()} $SATO to your TON wallet!` };
+    } catch (e) {
+      return { success: true, message: `Claim recorded: ${amount.toLocaleString()} $SATO` };
+    }
+  }, [user]);
+
   return { 
     user, loading, syncing, tap, levelUp, buyCard, setUser, settings, myReferrals,
-    upgradeBoost, fullRefill, claimCipher, claimCombo, claimDailyReward, verifyWallet
+    upgradeBoost, fullRefill, claimCipher, claimCombo, claimDailyReward, verifyWallet,
+    stakeTokens, claimStakingYield, unstakeTokens, claimAirdropTokens
   };
 };

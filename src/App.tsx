@@ -12,6 +12,7 @@ import { collection, query, orderBy, limit, getDocs, doc, updateDoc, increment }
 import { db } from './lib/firebase';
 import { LeaderboardEntry, AdTask } from './types/game';
 import AdminPanel from './components/AdminPanel';
+import TokenLaunchHub from './components/TokenLaunchHub';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
@@ -43,7 +44,8 @@ export default function App() {
 
   const { 
     user, loading, syncing, tap, levelUp, buyCard, setUser, settings, myReferrals,
-    upgradeBoost, fullRefill, claimCipher, claimCombo, claimDailyReward, verifyWallet
+    upgradeBoost, fullRefill, claimCipher, claimCombo, claimDailyReward, verifyWallet,
+    stakeTokens, claimStakingYield, unstakeTokens, claimAirdropTokens
   } = useGame(activeTab, isAdminPath);
 
   // Ban Screen
@@ -232,7 +234,7 @@ export default function App() {
 
     if (isMember) {
       // Check if already completed to prevent double reward
-      if (user.completedTasks.includes(taskId)) {
+      if (user?.completedTasks?.includes(taskId)) {
         alert("You have already received the reward for this task!");
         setVerifyingTask(null);
         return;
@@ -276,7 +278,7 @@ export default function App() {
 
     if (currentInvites >= requiredCount) {
       // Check if already completed to prevent double reward
-      if (user.completedTasks.includes(taskId)) {
+      if (user?.completedTasks?.includes(taskId)) {
         alert("You have already received the reward for this task!");
         setVerifyingTask(null);
         return;
@@ -697,7 +699,7 @@ export default function App() {
           </div>
           <div className="grid gap-3">
             {TASKS.filter(t => t.type !== 'ads').map((task) => {
-              const isCompleted = user?.completedTasks.includes(task.id);
+              const isCompleted = user?.completedTasks?.includes(task.id) || false;
               return (
                 <div key={task.id} className={`bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group ${isCompleted ? 'opacity-40' : ''}`}>
                   <div className="flex items-center gap-3.5">
@@ -898,100 +900,15 @@ export default function App() {
   );
 
   const renderAirdrop = () => (
-    <div className="p-5 flex flex-col gap-6 pb-24 overflow-y-auto max-h-screen">
-      <div className="flex flex-col items-center text-center gap-4 mt-4">
-        <div className="w-20 h-20 bg-card-bg rounded-[28px] flex items-center justify-center text-accent-gold transform -rotate-3 border-b-4 border-black/20 shadow-xl relative">
-          <Wallet size={32} />
-          {user?.isVerified && (
-            <div className="absolute -top-1 -right-1 bg-green-500 text-black rounded-full p-1 border-2 border-[#0a0b0d]">
-              <Check size={12} strokeWidth={4} />
-            </div>
-          )}
-        </div>
-        <div>
-          <h2 className="text-2xl font-black text-white italic uppercase tracking-tighter">Airdrop Tasks</h2>
-          <p className="text-text-secondary text-xs max-w-[280px]">Complete verification to unlock your eligibility for the upcoming distribution.</p>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 mb-1">
-          <Zap className="text-accent-blue" size={20} />
-          <h2 className="text-lg font-black text-white tracking-tight uppercase italic">Mandatory Tasks</h2>
-        </div>
-        
-        {/* Verification Task */}
-        <button 
-          onClick={() => !user?.isVerified && setShowVerificationModal(true)}
-          className={`bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group transition-all ${user?.isVerified ? 'opacity-80' : 'active:scale-95'}`}
-        >
-          <div className="flex items-center gap-3.5 text-left">
-            <div className="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center text-red-500">
-               <Lock size={24} />
-            </div>
-            <div>
-              <h4 className="text-white font-bold text-sm">Identity Verification</h4>
-              <p className="text-[10px] text-text-secondary">
-                {user?.isVerified ? 'Verification Complete' : user?.verificationTxHash ? 'Verification Pending...' : 'Required: 0.1 TON Transaction'}
-              </p>
-            </div>
-          </div>
-          {user?.isVerified ? (
-            <CheckCircle2 className="text-green-500" size={24} />
-          ) : user?.verificationTxHash ? (
-            <Clock className="text-orange-500 animate-pulse" size={20} />
-          ) : (
-            <ChevronRight size={20} className="text-white/20" />
-          )}
-        </button>
-
-        <div className="bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center text-accent-gold">
-              <Wallet size={24} />
-            </div>
-            <div>
-              <h4 className="text-white font-bold text-sm">Connect Wallet</h4>
-              <p className="text-text-secondary text-[10px]">{user?.walletAddress ? 'Connected' : 'Wallet Not Linked'}</p>
-            </div>
-          </div>
-          {user?.walletAddress ? (
-            <CheckCircle2 className="text-green-500" size={24} />
-          ) : (
-            <div className="text-accent-gold"><Info size={20} /></div>
-          )}
-        </div>
-
-        <div className="bg-card-bg border border-white/5 p-4 rounded-2xl flex items-center justify-between group">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center text-accent-blue">
-               <Pickaxe size={24} />
-            </div>
-            <div>
-              <h4 className="text-white font-bold text-sm">Profit Score</h4>
-              <p className="text-text-secondary text-[10px]">Accumulated Passive Income</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-white font-bold text-xs">{formatNumber(Math.floor((user?.passiveIncomeRate || 0) * 3600))}</p>
-            <p className="text-[8px] text-accent-gold font-black uppercase">Active</p>
-          </div>
-        </div>
-      </div>
-
-      {user?.airdropScore ? (
-        <div className="bg-accent-gold/10 border border-accent-gold/20 p-6 rounded-3xl flex flex-col items-center text-center gap-2">
-           <Trophy size={48} className="text-accent-gold mb-2" />
-           <p className="text-[10px] text-accent-gold uppercase font-black tracking-widest leading-none">Est. Airdrop Points</p>
-           <h3 className="text-4xl font-black italic text-white tracking-tighter">{user.airdropScore.toLocaleString()}</h3>
-           <p className="text-text-secondary text-[9px] italic mt-2">Score updated periodically by the system.</p>
-        </div>
-      ) : (
-        <div className="mt-4 bg-accent-gold/5 border border-white/5 p-6 rounded-3xl flex flex-col items-center text-center gap-3">
-           <Info size={32} className="text-text-secondary opacity-20" />
-           <p className="text-text-secondary text-[10px] leading-relaxed max-w-[240px]">Scores are calculated based on activity. Check back soon for your current ranking.</p>
-        </div>
-      )}
+    <div className="h-full overflow-y-auto no-scrollbar">
+      <TokenLaunchHub
+        user={user!}
+        onVerifyClick={() => setShowVerificationModal(true)}
+        stakeTokens={stakeTokens}
+        claimStakingYield={claimStakingYield}
+        unstakeTokens={unstakeTokens}
+        claimAirdropTokens={claimAirdropTokens}
+      />
     </div>
   );
   const renderMine = () => {
@@ -1133,7 +1050,7 @@ export default function App() {
     return <AdminPanel />;
   }
 
-  if (loading) {
+  if (loading && !user) {
     return (
       <div className="min-h-screen bg-[#0a0b0d] flex flex-col items-center justify-center gap-4">
         <div className="w-16 h-16 border-4 border-[#f3ba2f] border-t-transparent rounded-full animate-spin" />
@@ -1142,12 +1059,27 @@ export default function App() {
     );
   }
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#0a0b0d] flex flex-col items-center justify-center gap-4 text-white p-6 text-center font-sans">
+        <div className="w-16 h-16 border-4 border-[#f3ba2f] border-t-transparent rounded-full animate-spin" />
+        <p className="text-[#f3ba2f] font-bold uppercase tracking-widest text-xs">Connecting to SatoCryp...</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="mt-4 px-5 py-2.5 bg-[#f3ba2f] text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:opacity-90 active:scale-95 transition-all"
+        >
+          Refresh Preview
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-bg-main text-text-primary font-sans selection:bg-accent-gold/30">
-      <div className="w-full min-h-screen bg-bg-main relative flex flex-col overflow-hidden">
+      <div className="w-full min-h-screen max-w-md mx-auto bg-bg-main relative flex flex-col overflow-hidden">
         <Header user={user} syncing={syncing} setUser={setUser} />
         
-        <main className="flex-1 h-0 relative">
+        <main className="flex-1 min-h-0 relative">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}

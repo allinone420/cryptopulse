@@ -33,6 +33,85 @@ export const AIRDROP_CONFIG = {
   VERIFICATION_FEE_TON: "0.1"
 };
 
+export const TOKEN_CONFIG = {
+  NAME: 'SatoCryp Token',
+  SYMBOL: '$SATO',
+  TOTAL_SUPPLY: 10000000000, // 10 Billion $SATO
+  ESTIMATED_LISTING_PRICE_USD: 0.005, // $0.005 target initial price
+  TGE_TARGET_TIMESTAMP: Date.now() + 68 * 24 * 60 * 60 * 1000, // ~68 days countdown
+  NETWORK: 'TON Blockchain (Jetton Standard)',
+  DEX_PARTNERS: ['STON.fi', 'DeDust.io'],
+  TOKENOMICS: [
+    { label: 'Community Airdrop', percentage: 60, tokens: 6000000000, color: '#f3ba2f', desc: 'Direct reward to players based on activity, PPH & verification' },
+    { label: 'DEX Liquidity Pool', percentage: 18, tokens: 1800000000, color: '#2d9cdb', desc: 'Permanently locked liquidity on STON.fi & DeDust for trading' },
+    { label: 'Ecosystem & Staking Vaults', percentage: 12, tokens: 1200000000, color: '#a855f7', desc: 'Yield rewards for locking and staking $SATO in-app' },
+    { label: 'Marketing & Strategic Listings', percentage: 10, tokens: 1000000000, color: '#22c55e', desc: 'Exchange listings, security audits, and partnership campaigns' }
+  ],
+  ROADMAP: [
+    { 
+      phase: 1, 
+      title: 'Phase 1: Mining & Community Genesis', 
+      status: 'completed', 
+      period: 'Q1-Q2 2026', 
+      items: ['Telegram Mini App Launch', 'Tap-to-Earn & Passive Profit Engine', 'Referral Network & Daily Cipher/Combo', 'Community Growth (100K+ Miners)'] 
+    },
+    { 
+      phase: 2, 
+      title: 'Phase 2: Sybil Audit & TON Verification', 
+      status: 'active', 
+      period: 'Current Phase', 
+      items: ['TON Connect 2.0 Web3 Integration', '0.1 TON On-Chain Identity Verification', 'Bot & Multi-Account Sybil Filter Engine', 'Live Token Allocation Estimator'] 
+    },
+    { 
+      phase: 3, 
+      title: 'Phase 3: Snapshot & Token Generation (TGE)', 
+      status: 'upcoming', 
+      period: 'Q3 2026', 
+      items: ['Final In-Game Balances Snapshot', '$SATO Jetton Smart Contract Deployment', 'On-Chain Token Claiming Activation', 'Community Distribution Initiation'] 
+    },
+    { 
+      phase: 4, 
+      title: 'Phase 4: DEX Listing & Staking Ecosystem', 
+      status: 'upcoming', 
+      period: 'Q4 2026', 
+      items: ['STON.fi & DeDust.io Liquidity Pools Open', 'CoinGecko & CoinMarketCap Tracking', 'In-App Staking Vaults & Governance', 'CEX Tier-1 Exchange Expansion'] 
+    }
+  ],
+  STAKING_POOLS: [
+    { 
+      id: 'flexible_7d', 
+      name: 'Silver Flex Vault', 
+      durationDays: 7, 
+      apy: 18, 
+      minStake: 500, 
+      lockPeriod: '7 Days', 
+      badge: 'Low Risk',
+      multiplier: '1.15x Mining Boost'
+    },
+    { 
+      id: 'diamond_30d', 
+      name: 'Diamond Lock Vault', 
+      durationDays: 30, 
+      apy: 45, 
+      minStake: 2500, 
+      lockPeriod: '30 Days', 
+      badge: 'Popular',
+      recommended: true,
+      multiplier: '1.45x Mining Boost'
+    },
+    { 
+      id: 'whale_90d', 
+      name: 'Whale Grand Vault', 
+      durationDays: 90, 
+      apy: 92, 
+      minStake: 10000, 
+      lockPeriod: '90 Days', 
+      badge: 'Max APY',
+      multiplier: '2.0x Mining Boost'
+    }
+  ]
+};
+
 export const BOOST_COSTS = {
   multiTap: 5000,
   energyLimit: 10000,

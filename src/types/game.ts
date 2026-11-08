@@ -49,6 +49,17 @@ export interface UserData {
   tonWallet?: string;
   verificationTxHash?: string;
   airdropScore?: number;
+  claimedTokens?: number;
+  stakedPositions?: {
+    [poolId: string]: {
+      poolId: string;
+      amount: number;
+      stakedAt: number;
+      durationDays: number;
+      apy: number;
+      claimedYield: number;
+    };
+  };
   
   // New Features
   dailyCipher?: {
@@ -68,6 +79,15 @@ export interface UserData {
     lastFullRefill?: number;
     refillsToday?: number;
   };
+}
+
+export interface StakingPosition {
+  poolId: string;
+  amount: number;
+  stakedAt: number;
+  durationDays: number;
+  apy: number;
+  claimedYield: number;
 }
 
 export interface Task {

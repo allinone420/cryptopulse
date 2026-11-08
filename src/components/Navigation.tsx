@@ -19,7 +19,7 @@ export const Navigation = ({ active, setActive }: TabProps) => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-card-bg border-t border-white/5 px-2 pb-8 pt-4 flex justify-between items-center z-50 overflow-x-auto">
+    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-card-bg border-t border-white/5 px-2 pb-8 pt-4 flex justify-between items-center z-50 overflow-x-auto">
       {tabs.map((tab) => (
         <button
           key={tab.id}
@@ -49,7 +49,7 @@ export const Header = ({ user }: { user: any; syncing: boolean; setUser: React.D
         </div>
         <div>
           <strong className="text-sm block leading-tight">{user?.username || '@player'}</strong>
-          <span className="text-xs text-text-secondary block">{currentLevelInfo.name} — Lvl {user?.level}</span>
+          <span className="text-xs text-text-secondary block">{currentLevelInfo.name} — Lvl {user?.level || 1}</span>
         </div>
       </div>
       

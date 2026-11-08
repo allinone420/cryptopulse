@@ -5,95 +5,107 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>SatoCryp</title>
     <script>
-      // Early robust polyfill for fetch and Telegram WebApp to prevent crashes and version issues
+      // Seamless Telegram WebApp environment setup for AI Studio preview & standard browsers
       (function() {
-        // 1. Robust Fetch Protection
         try {
-          var originalFetch = window.fetch;
-          if (originalFetch) {
-            var boundFetch = originalFetch.bind(window);
-            try {
-              // Try to redefine it to be writable/configurable if it's currently a getter-only
-              Object.defineProperty(window, 'fetch', {
-                value: boundFetch,
-                writable: true,
-                configurable: true,
-                enumerable: true
-              });
-            } catch (e) {
-              // Fallback: Just ignore errors if we can't redefine it
-              try { window.fetch = boundFetch; } catch (e2) {}
-            }
+          // Provide default Telegram init params so @twa-dev/sdk initializes smoothly in web/preview
+          var stored = sessionStorage.getItem('__telegram__initParams');
+          if (!stored) {
+            sessionStorage.setItem('__telegram__initParams', JSON.stringify({
+              tgWebAppVersion: "7.10",
+              tgWebAppPlatform: "weba",
+              tgWebAppThemeParams: JSON.stringify({
+                bg_color: "#0f1218",
+                text_color: "#ffffff",
+                secondary_bg_color: "#1c212b",
+                button_color: "#f3ba2f",
+                button_text_color: "#000000"
+              })
+            }));
           }
         } catch (e) {}
 
-        // 2. Global Harmless Error Suppression
-        window.addEventListener('error', function(ev) {
-          var msg = (ev.message || "").toLowerCase();
-          var isCloudStorage = msg.indexOf('cloudstorage') !== -1;
-          var isFetchGetter = msg.indexOf('fetch') !== -1 && msg.indexOf('getter') !== -1;
-          var isTwaVersion = msg.indexOf('telegram.webapp') !== -1 || msg.indexOf('version 6.0') !== -1;
-          
-          if (isCloudStorage || isFetchGetter || isTwaVersion) {
-            ev.preventDefault();
-            ev.stopImmediatePropagation();
-            return true;
+        // Harmless fallback for window.Telegram in non-telegram web contexts
+        try {
+          if (!window.Telegram) window.Telegram = {};
+          if (!window.Telegram.WebApp) {
+            window.Telegram.WebApp = {
+              version: "7.10",
+              platform: "weba",
+              colorScheme: "dark",
+              themeParams: { bg_color: "#0f1218", text_color: "#ffffff" },
+              isExpanded: true,
+              viewportHeight: window.innerHeight || 800,
+              viewportStableHeight: window.innerHeight || 800,
+              initData: "",
+              initDataUnsafe: {},
+              ready: function(){},
+              expand: function(){},
+              close: function(){},
+              setHeaderColor: function(){},
+              setBackgroundColor: function(){},
+              enableClosingConfirmation: function(){},
+              HapticFeedback: {
+                impactOccurred: function(){},
+                notificationOccurred: function(){},
+                selectionChanged: function(){}
+              },
+              MainButton: {
+                show: function(){}, hide: function(){}, setText: function(){},
+                onClick: function(){}, offClick: function(){},
+                showProgress: function(){}, hideProgress: function(){}
+              },
+              BackButton: {
+                show: function(){}, hide: function(){},
+                onClick: function(){}, offClick: function(){}
+              },
+              CloudStorage: {
+                setItem: function(k, v, cb) {
+                  try { localStorage.setItem('_tg_'+k, v); } catch(e){}
+                  if(cb) cb(null, true);
+                  return Promise.resolve(true);
+                },
+                getItem: function(k, cb) {
+                  var v = null;
+                  try { v = localStorage.getItem('_tg_'+k); } catch(e){}
+                  if(cb) cb(null, v);
+                  return Promise.resolve(v);
+                },
+                getItems: function(ks, cb) {
+                  var r = {};
+                  try { ks.forEach(function(k){ r[k] = localStorage.getItem('_tg_'+k); }); } catch(e){}
+                  if(cb) cb(null, r);
+                  return Promise.resolve(r);
+                },
+                removeItem: function(k, cb) {
+                  try { localStorage.removeItem('_tg_'+k); } catch(e){}
+                  if(cb) cb(null, true);
+                  return Promise.resolve(true);
+                },
+                removeItems: function(ks, cb) {
+                  try { ks.forEach(function(k){ localStorage.removeItem('_tg_'+k); }); } catch(e){}
+                  if(cb) cb(null, true);
+                  return Promise.resolve(true);
+                },
+                getKeys: function(cb) {
+                  var ks = [];
+                  try {
+                    ks = Object.keys(localStorage).filter(function(k){ return k.indexOf('_tg_') === 0; }).map(function(k){ return k.replace('_tg_', ''); });
+                  } catch(e){}
+                  if(cb) cb(null, ks);
+                  return Promise.resolve(ks);
+                }
+              }
+            };
           }
-        }, true);
-
-        // 3. Telegram WebApp CloudStorage & Version Enforcement
-        var mockCS = {
-          setItem: function(k, v, cb) { localStorage.setItem('_tg_'+k, v); if(cb)cb(null,true); return Promise.resolve(true); },
-          getItem: function(k, cb) { var v = localStorage.getItem('_tg_'+k); if(cb)cb(null,v); return Promise.resolve(v); },
-          getItems: function(ks, cb) { var r={}; ks.forEach(function(k){ r[k]=localStorage.getItem('_tg_'+k); }); if(cb)cb(null,r); return Promise.resolve(r); },
-          removeItem: function(k, cb) { localStorage.removeItem('_tg_'+k); if(cb)cb(null,true); return Promise.resolve(true); },
-          removeItems: function(ks, cb) { ks.forEach(function(k){ localStorage.removeItem('_tg_'+k); }); if(cb)cb(null,true); return Promise.resolve(true); },
-          getKeys: function(cb) { var ks=Object.keys(localStorage).filter(function(k){return k.indexOf('_tg_')===0;}).map(function(k){return k.replace('_tg_','');}); if(cb)cb(null,ks); return Promise.resolve(ks); }
-        };
-
-        function patchTWA() {
-          try {
-            if (!window.Telegram) window.Telegram = {};
-            if (!window.Telegram.WebApp) {
-              window.Telegram.WebApp = {
-                version: "7.10",
-                platform: "unknown",
-                initData: "",
-                initDataUnsafe: {},
-                ready: function(){},
-                expand: function(){},
-                close: function(){},
-                HapticFeedback: { impactOccurred: function(){}, notificationOccurred: function(){}, selectionChanged: function(){} },
-                MainButton: { show: function(){}, hide: function(){}, setText: function(){}, onClick: function(){}, offClick: function(){}, showProgress: function(){}, hideProgress: function(){} },
-                BackButton: { show: function(){}, hide: function(){}, onClick: function(){}, offClick: function(){} },
-                CloudStorage: mockCS
-              };
-            }
-            var twa = window.Telegram.WebApp;
-            // Robust property enforcement
-            if (twa.version !== "7.10") {
-              try { Object.defineProperty(twa, 'version', { value: "7.10", writable: true, configurable: true }); } catch(e) { twa.version = "7.10"; }
-            }
-            if (!twa.CloudStorage) {
-              try { Object.defineProperty(twa, 'CloudStorage', { value: mockCS, writable: true, configurable: true }); } catch(e) { twa.CloudStorage = mockCS; }
-            }
-            // Ensure ready() is called once
-            if (twa.ready) twa.ready();
-          } catch(e) {}
-        }
-
-        patchTWA();
-        var i = setInterval(patchTWA, 500);
-        setTimeout(function(){ clearInterval(i); }, 15000);
+        } catch(e) {}
       })();
     </script>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <!-- Monetag Ads Integration -->
-    <script src='https://libtl.com/sdk.js' data-zone='10932949' data-sdk='show_10932949'></script>
+    <!-- Monetag Ads Integration (async to prevent render blocking) -->
+    <script async src='https://libtl.com/sdk.js' data-zone='10932949' data-sdk='show_10932949'></script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="src/main.tsx"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
