@@ -212,12 +212,28 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
           if (userSnap.exists()) {
             const data = userSnap.data() as UserData;
             
-            // SECURITY CHECK: If this account has a DIFFERENT Telegram ID than the current session, sign out.
-            // This prevents account hijacking or accidental session sharing in shared browsers.
+            // Safely handle Telegram user mapping if ID differs from stored doc
             if (currentTgId && data.telegramId && data.telegramId !== currentTgId) {
-              console.warn('Session conflict detected! Signing out...');
-              await auth.signOut();
-              return; 
+              console.warn('Telegram user session mapping for:', currentTgId);
+              try {
+                const q = query(collection(db, 'users'), where('telegramId', '==', currentTgId), limit(1));
+                const tgSnap = await getDocs(q);
+                if (!tgSnap.empty) {
+                  const existingTgUser = tgSnap.docs[0].data() as UserData;
+                  setUser(existingTgUser);
+                  setLoading(false);
+                  return;
+                }
+              } catch (e) {
+                console.warn('Failed to fetch user by telegramId:', e);
+              }
+              const freshUser = createDefaultUser(targetUid, currentTgId, tgUser);
+              try {
+                await setDoc(userRef, freshUser);
+              } catch (e) {}
+              setUser(freshUser);
+              setLoading(false);
+              return;
             }
             
             // If the account has no Telegram ID (telegramId: 0) but we have one now,
