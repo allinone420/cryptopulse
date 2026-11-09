@@ -7,7 +7,7 @@ import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAM
 import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
 import { hapticFeedback, hapticNotification } from './lib/telegram';
-import { TonConnectButton, useTonConnectUI } from '@tonconnect/ui-react';
+import { TonConnectButton, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { LeaderboardEntry, AdTask } from './types/game';
@@ -74,6 +74,7 @@ export default function App() {
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [tonConnectUI] = useTonConnectUI();
+  const wallet = useTonWallet();
   
   const [adCooldown, setAdCooldown] = useState(0);
   const [verifyingTask, setVerifyingTask] = useState<string | null>(null);
@@ -106,7 +107,7 @@ export default function App() {
   }, []);
 
   const handleAirdropVerification = async () => {
-    if (!tonConnectUI.account) {
+    if (!wallet && !tonConnectUI.account) {
       hapticNotification('error');
       alert("Please connect your TON wallet first using the button at the top!");
       return;
@@ -1131,7 +1132,7 @@ export default function App() {
               </div>
 
               <div className="w-full bg-black/40 rounded-3xl border border-white/5 p-5 flex flex-col gap-4">
-                 {!tonConnectUI.account ? (
+                 {(!wallet && !tonConnectUI.account) ? (
                    <div className="flex flex-col gap-4 items-center">
                       <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest leading-none">Wallet Required</p>
                       <TonConnectButton />
@@ -1153,7 +1154,7 @@ export default function App() {
                      <div className="flex flex-col gap-2 items-start">
                         <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest ml-1">Current Wallet</p>
                         <div className="w-full bg-white/5 p-3 rounded-xl border border-white/10 flex items-center justify-between gap-3 group">
-                           <p className="text-[10px] font-mono text-white/60 truncate italic">{tonConnectUI.account.address}</p>
+                           <p className="text-[10px] font-mono text-white/60 truncate italic">{wallet?.account?.address || tonConnectUI.account?.address}</p>
                            <CheckCircle2 size={14} className="text-green-400" />
                         </div>
                      </div>
@@ -1163,7 +1164,7 @@ export default function App() {
 
               <div className="w-full flex flex-col gap-3">
                  <button 
-                   disabled={!tonConnectUI.account || isVerifying}
+                   disabled={(!wallet && !tonConnectUI.account) || isVerifying}
                    onClick={handleAirdropVerification}
                    className="w-full bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl shadow-red-500/20 active:scale-[0.98] transition-all disabled:opacity-20 flex items-center justify-center gap-2"
                  >
