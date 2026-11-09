@@ -14,16 +14,15 @@ const getManifestUrl = () => {
   try {
     if (typeof window !== 'undefined' && window.location) {
       const origin = window.location.origin;
+      const pathname = window.location.pathname;
+      const pathSegments = pathname.split('/').filter(Boolean);
+      const subpath = pathSegments.length > 0 && !pathname.endsWith('.html') && !pathname.endsWith('/') ? '/' + pathSegments[0] : '';
       if (origin && origin !== 'null' && origin.startsWith('http')) {
-        return `${origin}/tonconnect-manifest.json`;
-      }
-      if (window.location.href && window.location.href.startsWith('http')) {
-        const u = new URL(window.location.href);
-        return `${u.origin}/tonconnect-manifest.json`;
+        return `${origin}${subpath}/tonconnect-manifest.json`;
       }
     }
   } catch (e) {}
-  return 'https://ais-pre-nhvt7gz2jkftcpn46aupes-568480704747.asia-southeast1.run.app/tonconnect-manifest.json';
+  return 'https://allinone420.github.io/cryptopulse/tonconnect-manifest.json';
 };
 
 const manifestUrl = getManifestUrl();
