@@ -1083,24 +1083,25 @@ export default function App() {
       <div className="w-full min-h-screen max-w-md mx-auto bg-bg-main relative flex flex-col overflow-hidden">
         <Header user={user} syncing={syncing} setUser={setUser} />
         
-        <main className="flex-1 min-h-0 relative">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="h-full overflow-hidden"
-            >
-              {activeTab === 'home' && <div className="h-full overflow-y-auto pb-24 no-scrollbar">{renderHome()}</div>}
-              {activeTab === 'mine' && renderMine()}
-              {activeTab === 'tasks' && <div className="h-full overflow-y-auto pb-24 no-scrollbar">{renderTasks()}</div>}
-              {activeTab === 'friends' && <div className="h-full overflow-y-auto pb-24 no-scrollbar">{renderFriends()}</div>}
-              {activeTab === 'airdrop' && <div className="h-full overflow-y-auto pb-24 no-scrollbar">{renderAirdrop()}</div>}
-              {activeTab === 'leaders' && renderLeaders()}
-            </motion.div>
-          </AnimatePresence>
+        <main className="flex-1 min-h-0 relative flex flex-col">
+          <div className="h-full overflow-hidden relative flex flex-col flex-1" style={{ display: activeTab === 'home' ? 'flex' : 'none' }}>
+            <div className="h-full overflow-y-auto pb-24 no-scrollbar flex-1">{renderHome()}</div>
+          </div>
+          <div className="h-full overflow-hidden relative flex flex-col flex-1" style={{ display: activeTab === 'mine' ? 'flex' : 'none' }}>
+            {renderMine()}
+          </div>
+          <div className="h-full overflow-hidden relative flex flex-col flex-1" style={{ display: activeTab === 'tasks' ? 'flex' : 'none' }}>
+            <div className="h-full overflow-y-auto pb-24 no-scrollbar flex-1">{renderTasks()}</div>
+          </div>
+          <div className="h-full overflow-hidden relative flex flex-col flex-1" style={{ display: activeTab === 'friends' ? 'flex' : 'none' }}>
+            <div className="h-full overflow-y-auto pb-24 no-scrollbar flex-1">{renderFriends()}</div>
+          </div>
+          <div className="h-full overflow-hidden relative flex flex-col flex-1" style={{ display: activeTab === 'airdrop' ? 'flex' : 'none' }}>
+            <div className="h-full overflow-y-auto pb-24 no-scrollbar flex-1">{renderAirdrop()}</div>
+          </div>
+          <div className="h-full overflow-hidden relative flex flex-col flex-1" style={{ display: activeTab === 'leaders' ? 'flex' : 'none' }}>
+            {renderLeaders()}
+          </div>
         </main>
 
         <Navigation active={activeTab} setActive={setActiveTab} />
