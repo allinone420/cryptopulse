@@ -5,16 +5,21 @@ import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
-// Safely generate manifest URL, falling back gracefully if window.location.origin is invalid
+// Guaranteed valid absolute manifest URL for TON Connect in all browser/webview contexts
 const getManifestUrl = () => {
   try {
-    const origin = (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null')
-      ? window.location.origin
-      : '';
-    return origin ? `${origin}/tonconnect-manifest.json` : '/tonconnect-manifest.json';
-  } catch (e) {
-    return '/tonconnect-manifest.json';
-  }
+    if (typeof window !== 'undefined' && window.location) {
+      const origin = window.location.origin;
+      if (origin && origin !== 'null' && origin.startsWith('http')) {
+        return `${origin}/tonconnect-manifest.json`;
+      }
+      if (window.location.href && window.location.href.startsWith('http')) {
+        const u = new URL(window.location.href);
+        return `${u.origin}/tonconnect-manifest.json`;
+      }
+    }
+  } catch (e) {}
+  return 'https://ais-pre-nhvt7gz2jkftcpn46aupes-568480704747.asia-southeast1.run.app/tonconnect-manifest.json';
 };
 
 const manifestUrl = getManifestUrl();
@@ -28,4 +33,3 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>,
 );
-
