@@ -2,32 +2,63 @@ import WebApp from '@twa-dev/sdk';
 
 export const initTelegram = () => {
   try {
-    WebApp.ready();
-    WebApp.expand();
+    if (typeof WebApp !== 'undefined') {
+      if (typeof WebApp.ready === 'function') {
+        WebApp.ready();
+      }
+      if (typeof WebApp.expand === 'function') {
+        WebApp.expand();
+      }
 
-    // Hamster Kombat style seamless header
-    // Use 'bg_color' or specific hex to remove the blue/gray bar
-    if ((WebApp as any).setHeaderColor) {
-      (WebApp as any).setHeaderColor('#0f1218'); 
-    }
-    if ((WebApp as any).setBackgroundColor) {
-      (WebApp as any).setBackgroundColor('#0f1218');
-    }
+      // Hamster Kombat style seamless header
+      if (typeof (WebApp as any).setHeaderColor === 'function') {
+        (WebApp as any).setHeaderColor('#0f1218'); 
+      }
+      if (typeof (WebApp as any).setBackgroundColor === 'function') {
+        (WebApp as any).setBackgroundColor('#0f1218');
+      }
 
-    WebApp.enableClosingConfirmation();
+      if (typeof (WebApp as any).enableClosingConfirmation === 'function') {
+        (WebApp as any).enableClosingConfirmation();
+      }
+    }
   } catch (e) {
-    console.warn('Telegram WebApp SDK not initialized');
+    console.warn('Telegram WebApp SDK init notice:', e);
   }
 };
 
 export const hapticFeedback = () => {
-  WebApp.HapticFeedback.impactOccurred('medium');
+  try {
+    if (WebApp?.HapticFeedback && typeof WebApp.HapticFeedback.impactOccurred === 'function') {
+      WebApp.HapticFeedback.impactOccurred('medium');
+    }
+  } catch (e) {}
+};
+
+export const hapticNotification = (type: 'error' | 'success' | 'warning' = 'success') => {
+  try {
+    if (WebApp?.HapticFeedback && typeof WebApp.HapticFeedback.notificationOccurred === 'function') {
+      WebApp.HapticFeedback.notificationOccurred(type);
+    }
+  } catch (e) {}
 };
 
 export const showAlert = (message: string) => {
-  WebApp.showAlert(message);
+  try {
+    if (WebApp && typeof WebApp.showAlert === 'function') {
+      WebApp.showAlert(message);
+    } else {
+      window.alert(message);
+    }
+  } catch (e) {
+    window.alert(message);
+  }
 };
 
 export const closeWebApp = () => {
-  WebApp.close();
+  try {
+    if (WebApp && typeof WebApp.close === 'function') {
+      WebApp.close();
+    }
+  } catch (e) {}
 };

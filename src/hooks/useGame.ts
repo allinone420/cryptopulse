@@ -191,15 +191,9 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
 
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       try {
+        // Safely extract Telegram user data if available
         const tgUser = WebApp?.initDataUnsafe?.user;
-        const currentTgId = tgUser?.id;
-
-        // If we are in a Telegram environment but don't have user data yet, 
-        // wait for the next effect trigger (since we depend on the user ID)
-        // This prevents creating "blank" accounts before Telegram is ready.
-        if (WebApp?.initData && !currentTgId) {
-           return;
-        }
+        const currentTgId = tgUser?.id || 0;
 
         if (fbUser) {
           const targetUid = fbUser.uid;

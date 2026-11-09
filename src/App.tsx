@@ -6,6 +6,7 @@ import { Zap, Coins, Users, Trophy, Wallet, CheckCircle2, ChevronRight, PlayCirc
 import { TASKS, DAILY_REWARD_BASE, DAILY_REWARD_STEP, COINS_PER_TAP, BOT_USERNAME, LEVELS, MINE_CARDS, MineCard, MAX_CARD_LEVEL, DAILY_CIPHER_REWARD, DAILY_COMBO_REWARD, BOOST_COSTS, AIRDROP_CONFIG } from './lib/constants';
 import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
+import { hapticFeedback, hapticNotification } from './lib/telegram';
 import { TonConnectButton, useTonConnectUI } from '@tonconnect/ui-react';
 import { TonConnect } from '@tonconnect/sdk';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
@@ -29,11 +30,6 @@ export default function App() {
   };
 
   const [isAdminPath, setIsAdminPath] = useState(checkIsAdmin());
-  const hapticFeedback = () => {
-    try {
-      WebApp.HapticFeedback.impactOccurred('medium');
-    } catch (e) {}
-  };
 
   const formatNumber = (num: number) => {
     if (num >= 1000000000) return (num / 1000000000).toFixed(2) + 'B';
@@ -112,7 +108,7 @@ export default function App() {
 
   const handleAirdropVerification = async () => {
     if (!tonConnectUI.account) {
-      WebApp.HapticFeedback.notificationOccurred('error');
+      hapticNotification('error');
       alert("Please connect your TON wallet first using the button at the top!");
       return;
     }
@@ -144,7 +140,7 @@ export default function App() {
       });
       
       setShowVerificationModal(false);
-      WebApp.HapticFeedback.notificationOccurred('success');
+      hapticNotification('success');
       alert("Official Airdrop Verification Successful! Your score is now pending technical review.");
     } catch (err: any) {
       console.error("Verification failed:", err);
@@ -259,10 +255,10 @@ export default function App() {
       }
 
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-      WebApp.HapticFeedback.notificationOccurred('success');
+      hapticNotification('success');
       alert("Verification successful! Reward added.");
     } else {
-      WebApp.HapticFeedback.notificationOccurred('error');
+      hapticNotification('error');
       const channelDisplayName = settings?.tgChannelId || "@SatoCryp";
       alert(`Join failed or not verified. Please join ${channelDisplayName} channel first!`);
     }
@@ -303,10 +299,10 @@ export default function App() {
       }
 
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-      WebApp.HapticFeedback.notificationOccurred('success');
+      hapticNotification('success');
       alert(`Milestone reached! ${reward.toLocaleString()} coins added.`);
     } else {
-      WebApp.HapticFeedback.notificationOccurred('error');
+      hapticNotification('error');
       alert(`You need ${requiredCount} friends. Currently: ${currentInvites}`);
     }
     
@@ -341,9 +337,9 @@ export default function App() {
         confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
       }, 250);
 
-      WebApp.HapticFeedback.notificationOccurred('success');
+      hapticNotification('success');
     } else {
-      WebApp.HapticFeedback.notificationOccurred('error');
+      hapticNotification('error');
     }
   };
 
@@ -467,7 +463,7 @@ export default function App() {
         colors: ['#f3ba2f', '#ffffff']
       });
 
-      WebApp.HapticFeedback.notificationOccurred('success');
+      hapticNotification('success');
       
       setAdCooldown(5);
       const adTimer = setInterval(() => {
@@ -481,7 +477,7 @@ export default function App() {
       }, 1000);
     }).catch((e: any) => {
       console.error('Ad Error:', e);
-      WebApp.HapticFeedback.notificationOccurred('error');
+      hapticNotification('error');
     });
   };
 
@@ -760,7 +756,15 @@ export default function App() {
     const link = generateInviteLink();
     const text = `Join me on SatoCryp and get 2,500 coins as a welcome bonus! 🚀`;
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
-    WebApp.openTelegramLink(shareUrl);
+    try {
+      if (WebApp && typeof WebApp.openTelegramLink === 'function') {
+        WebApp.openTelegramLink(shareUrl);
+      } else {
+        window.open(shareUrl, '_blank');
+      }
+    } catch (e) {
+      window.open(shareUrl, '_blank');
+    }
   };
 
   const copyToClipboard = () => {
@@ -1484,7 +1488,7 @@ export default function App() {
                         }, 2000);
                       } else {
                         setCipherStatus('error');
-                        WebApp.HapticFeedback.notificationOccurred('error');
+                        hapticNotification('error');
                         setTimeout(() => setCipherStatus('idle'), 1000);
                       }
                     }}
