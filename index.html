@@ -10,95 +10,109 @@
     <meta property="og:title" content="SatoCryp" />
     <meta property="og:description" content="SatoCryp Telegram Mini App Tap-to-Earn & Token Launch Hub" />
 
-    <!-- Official Telegram WebApp SDK script required by Telegram Mini Apps -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Telegram WebApp SDK script loaded ASYNC so it never blocks mobile rendering or slow networks -->
+    <script async src="https://telegram.org/js/telegram-web-app.js"></script>
 
     <script>
+      // Global error listener to diagnose and prevent silent loading hangs
+      window.__satoErrors = [];
+      window.onerror = function(msg, url, line, col, err) {
+        console.warn('SatoCryp global error caught:', msg, url, line);
+        var errBox = document.getElementById('loader-error-box');
+        var retryBtn = document.getElementById('loader-retry-btn');
+        if (errBox) {
+          errBox.style.display = 'block';
+          errBox.textContent = 'Loading notice: ' + (msg || 'Resource connecting...');
+        }
+        if (retryBtn) retryBtn.style.display = 'inline-block';
+      };
+      window.addEventListener('unhandledrejection', function(e) {
+        console.warn('SatoCryp rejection:', e.reason);
+      });
+
       // Safe initialization for Telegram WebApp & preview compatibility
       (function() {
         try {
-          if (window.Telegram && window.Telegram.WebApp) {
-            try { window.Telegram.WebApp.ready(); } catch(e) {}
-            try { window.Telegram.WebApp.expand(); } catch(e) {}
-            try {
-              if (window.Telegram.WebApp.setHeaderColor) {
-                window.Telegram.WebApp.setHeaderColor('#0f1218');
-              }
-              if (window.Telegram.WebApp.setBackgroundColor) {
-                window.Telegram.WebApp.setBackgroundColor('#0f1218');
-              }
-            } catch(e) {}
-          } else {
-            // Provide harmless mock for standalone browsers / AI Studio preview
-            if (!window.Telegram) window.Telegram = {};
-            if (!window.Telegram.WebApp) {
-              window.Telegram.WebApp = {
-                version: "7.10",
-                platform: "weba",
-                colorScheme: "dark",
-                themeParams: { bg_color: "#0f1218", text_color: "#ffffff" },
-                isExpanded: true,
-                viewportHeight: window.innerHeight || 800,
-                viewportStableHeight: window.innerHeight || 800,
-                initData: "",
-                initDataUnsafe: {
-                  user: {
-                    id: 999999999,
-                    first_name: "Web",
-                    username: "PreviewUser"
-                  }
-                },
-                ready: function(){},
-                expand: function(){},
-                close: function(){},
-                setHeaderColor: function(){},
-                setBackgroundColor: function(){},
-                enableClosingConfirmation: function(){},
-                openTelegramLink: function(url){ window.open(url, '_blank'); },
-                showAlert: function(msg){ window.alert(msg); },
-                HapticFeedback: {
-                  impactOccurred: function(){},
-                  notificationOccurred: function(){},
-                  selectionChanged: function(){}
-                },
-                MainButton: {
-                  show: function(){}, hide: function(){}, setText: function(){},
-                  onClick: function(){}, offClick: function(){},
-                  showProgress: function(){}, hideProgress: function(){}
-                },
-                BackButton: {
-                  show: function(){}, hide: function(){},
-                  onClick: function(){}, offClick: function(){}
-                },
-                CloudStorage: {
-                  setItem: function(k, v, cb){ if(cb) cb(null, true); return Promise.resolve(true); },
-                  getItem: function(k, cb){ if(cb) cb(null, null); return Promise.resolve(null); },
-                  getItems: function(ks, cb){ if(cb) cb(null, {}); return Promise.resolve({}); },
-                  removeItem: function(k, cb){ if(cb) cb(null, true); return Promise.resolve(true); },
-                  removeItems: function(ks, cb){ if(cb) cb(null, true); return Promise.resolve(true); },
-                  getKeys: function(cb){ if(cb) cb(null, []); return Promise.resolve([]); }
+          if (!window.Telegram) window.Telegram = {};
+          if (!window.Telegram.WebApp) {
+            window.Telegram.WebApp = {
+              version: "7.10",
+              platform: "weba",
+              colorScheme: "dark",
+              themeParams: { bg_color: "#0f1218", text_color: "#ffffff" },
+              isExpanded: true,
+              viewportHeight: window.innerHeight || 800,
+              viewportStableHeight: window.innerHeight || 800,
+              initData: "",
+              initDataUnsafe: {
+                user: {
+                  id: 999999999,
+                  first_name: "Web",
+                  username: "PreviewUser"
                 }
-              };
-            }
+              },
+              ready: function(){},
+              expand: function(){},
+              close: function(){},
+              setHeaderColor: function(){},
+              setBackgroundColor: function(){},
+              enableClosingConfirmation: function(){},
+              openTelegramLink: function(url){ window.open(url, '_blank'); },
+              showAlert: function(msg){ window.alert(msg); },
+              HapticFeedback: {
+                impactOccurred: function(){},
+                notificationOccurred: function(){},
+                selectionChanged: function(){}
+              },
+              MainButton: {
+                show: function(){}, hide: function(){}, setText: function(){},
+                onClick: function(){}, offClick: function(){},
+                showProgress: function(){}, hideProgress: function(){}
+              },
+              BackButton: {
+                show: function(){}, hide: function(){},
+                onClick: function(){}, offClick: function(){}
+              },
+              CloudStorage: {
+                setItem: function(k, v, cb){ if(cb) cb(null, true); return Promise.resolve(true); },
+                getItem: function(k, cb){ if(cb) cb(null, null); return Promise.resolve(null); },
+                getItems: function(ks, cb){ if(cb) cb(null, {}); return Promise.resolve({}); },
+                removeItem: function(k, cb){ if(cb) cb(null, true); return Promise.resolve(true); },
+                removeItems: function(ks, cb){ if(cb) cb(null, true); return Promise.resolve(true); },
+                getKeys: function(cb){ if(cb) cb(null, []); return Promise.resolve([]); }
+              }
+            };
           }
         } catch (e) {
-          console.warn("Telegram WebApp bootstrap notice:", e);
+          console.warn("Telegram bootstrap notice:", e);
         }
       })();
     </script>
 
     <!-- Monetag Ads Integration (async to prevent render blocking) -->
     <script async src='https://libtl.com/sdk.js' data-zone='10932949' data-sdk='show_10932949'></script>
-    <script type="module" crossorigin src="/assets/index-BkZ6Zjb_.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-iPsQF9PF.css">
+    <script type="module" crossorigin src="/assets/index-B0g5gOaN.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-C8v29IMT.css">
   </head>
   <body style="background-color: #0f1218; color: #ffffff; margin: 0; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; overflow-x: hidden;">
     <div id="root">
       <!-- Dark branded fallback screen while JS bundle downloads -->
-      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0f1218; color: #ffffff; text-align: center; padding: 20px;">
+      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0f1218; color: #ffffff; text-align: center; padding: 24px; box-sizing: border-box;">
         <div style="width: 52px; height: 52px; border: 4px solid #f3ba2f; border-top-color: transparent; border-radius: 50%; animation: satoSpin 0.9s linear infinite;"></div>
-        <p style="margin-top: 18px; font-size: 13px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #f3ba2f;">SatoCryp Loading...</p>
+        <p style="margin-top: 20px; font-size: 14px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #f3ba2f;">SatoCryp</p>
         <p style="margin-top: 6px; font-size: 11px; color: #8e9299; letter-spacing: 0.05em;">Connecting to game server...</p>
+        
+        <div id="loader-error-box" style="display:none; color: #f3ba2f; font-size: 11px; margin-top: 14px; max-width: 300px; word-break: break-word; background: rgba(243,186,47,0.1); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(243,186,47,0.2);"></div>
+        <button id="loader-retry-btn" onclick="window.location.reload(true)" style="display:none; margin-top: 16px; padding: 10px 22px; background: #f3ba2f; color: #000; font-weight: 800; border-radius: 12px; border: none; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; cursor: pointer;">Tap to Reload</button>
+        <script>
+          // Show reload button if connection takes more than 4 seconds on mobile data
+          setTimeout(function() {
+            var btn = document.getElementById('loader-retry-btn');
+            if (btn && document.getElementById('root') && document.getElementById('root').querySelector('#loader-retry-btn')) {
+              btn.style.display = 'inline-block';
+            }
+          }, 4000);
+        </script>
         <style>
           @keyframes satoSpin {
             0% { transform: rotate(0deg); }
