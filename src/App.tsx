@@ -545,7 +545,7 @@ export default function App() {
             <div className="w-[160px] h-[160px] bg-[#363d4a] rounded-[40px] rotate-45 flex items-center justify-center overflow-hidden">
                <div className="-rotate-45 relative w-full h-full flex items-center justify-center">
                 <img 
-                  src="https://i.ibb.co.com/0ywpgL4q/logo.webp" 
+                  src="https://i.ibb.co/0ywpgL4q/logo.webp" 
                   alt="SatoCryp" 
                   className="w-full h-full object-cover select-none pointer-events-none opacity-90"
                   referrerPolicy="no-referrer"
