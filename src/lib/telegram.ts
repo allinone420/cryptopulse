@@ -2,6 +2,17 @@ import WebApp from '@twa-dev/sdk';
 
 export const initTelegram = () => {
   try {
+    // 1. Check window.Telegram.WebApp directly (official client bridge)
+    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
+      const tg = (window as any).Telegram.WebApp;
+      if (typeof tg.ready === 'function') tg.ready();
+      if (typeof tg.expand === 'function') tg.expand();
+      if (typeof tg.setHeaderColor === 'function') tg.setHeaderColor('#0f1218');
+      if (typeof tg.setBackgroundColor === 'function') tg.setBackgroundColor('#0f1218');
+      if (typeof tg.enableClosingConfirmation === 'function') tg.enableClosingConfirmation();
+    }
+
+    // 2. Check @twa-dev/sdk
     if (typeof WebApp !== 'undefined') {
       if (typeof WebApp.ready === 'function') {
         WebApp.ready();
@@ -9,15 +20,12 @@ export const initTelegram = () => {
       if (typeof WebApp.expand === 'function') {
         WebApp.expand();
       }
-
-      // Hamster Kombat style seamless header
       if (typeof (WebApp as any).setHeaderColor === 'function') {
         (WebApp as any).setHeaderColor('#0f1218'); 
       }
       if (typeof (WebApp as any).setBackgroundColor === 'function') {
         (WebApp as any).setBackgroundColor('#0f1218');
       }
-
       if (typeof (WebApp as any).enableClosingConfirmation === 'function') {
         (WebApp as any).enableClosingConfirmation();
       }

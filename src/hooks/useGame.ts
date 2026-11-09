@@ -89,15 +89,24 @@ const createDefaultUser = (uid: string, telegramId: number = 0, tgUser?: any, in
 });
 
 export const useGame = (activeTab?: string, skipInit: boolean = false) => {
-  const [user, setUserState] = useState<UserData | null>(() => getLocalUser());
-  const setUser = useCallback((valOrFn: UserData | null | ((prev: UserData | null) => UserData | null)) => {
+  const [user, setUserState] = useState<UserData>(() => {
+    const local = getLocalUser();
+    if (local) return local;
+    const tgUser = typeof window !== 'undefined'
+      ? ((window as any).Telegram?.WebApp?.initDataUnsafe?.user || WebApp?.initDataUnsafe?.user)
+      : undefined;
+    const initial = createDefaultUser('player_' + Math.random().toString(36).substring(2, 9), tgUser?.id || 0, tgUser);
+    saveLocalUser(initial);
+    return initial;
+  });
+  const setUser = useCallback((valOrFn: UserData | null | ((prev: UserData) => UserData)) => {
     setUserState(prev => {
-      const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
+      const next = typeof valOrFn === 'function' ? (valOrFn as any)(prev) : valOrFn;
       if (next) saveLocalUser(next);
-      return next;
+      return next || prev;
     });
   }, []);
-  const [loading, setLoading] = useState(!getLocalUser());
+  const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [myReferrals, setMyReferrals] = useState<any[]>([]);
