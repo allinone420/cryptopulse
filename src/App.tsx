@@ -1135,8 +1135,13 @@ export default function App() {
                  {(!wallet && !tonConnectUI.account) ? (
                    <div className="flex flex-col gap-4 items-center">
                       <p className="text-[10px] text-text-secondary uppercase font-black tracking-widest leading-none">Wallet Required</p>
-                      <TonConnectButton />
-                      <p className="text-[9px] text-zinc-500 italic">Connect your TON wallet to use the automatic verification system.</p>
+                      <button
+                        onClick={() => tonConnectUI.openModal()}
+                        className="w-full py-3.5 bg-accent-gold text-black rounded-xl font-black text-xs uppercase tracking-wider hover:opacity-95 active:scale-98 transition-all flex items-center justify-center gap-2 shadow-lg"
+                      >
+                        <Wallet size={16} /> Connect TON Wallet
+                      </button>
+                      <p className="text-[9px] text-zinc-400 italic">Tap to open TON Connect & link your wallet instantly.</p>
                    </div>
                  ) : (
                    <>
