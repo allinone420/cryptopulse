@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0f1218" />
     <meta name="color-scheme" content="dark" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>SatoCryp</title>
     <meta name="description" content="SatoCryp is a premier Telegram Mini App tap-to-earn game with a robust token launch hub, staking vaults, and airdrop distribution." />
     <meta property="og:title" content="SatoCryp" />
@@ -86,9 +89,32 @@
       }
     </style>
 
-    <!-- Global diagnostic script error logger with capture phase -->
+    <!-- Global diagnostic script error logger with capture phase and aggressive cache bust -->
     <script>
       window.__SATOCRYP_MOUNTED = false;
+      function hardReload() {
+        try {
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              for (var i = 0; i < names.length; i++) {
+                caches.delete(names[i]);
+              }
+            });
+          }
+          if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+              for(var j = 0; j < registrations.length; j++) {
+                registrations[j].unregister();
+              }
+            });
+          }
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch(e) {}
+        var cleanUrl = window.location.href.split('?')[0].split('#')[0];
+        window.location.replace(cleanUrl + '?v=' + Date.now());
+      }
+
       function showDiagError(msg) {
         var errBox = document.getElementById('satocryp-diag-box');
         if (errBox) {
@@ -99,20 +125,29 @@
       }
       window.addEventListener('error', function(e) {
         console.warn('Script error caught:', e);
+        var isScriptLoadError = e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK');
         var message = e.message || (e.target && e.target.src ? 'Failed to load script: ' + e.target.src : 'Initialization error');
         showDiagError(message);
+        if (isScriptLoadError) {
+          // Automatically attempt hard reload once if script failed to load due to stale cache
+          var reloadKey = '_satocryp_auto_reloaded';
+          if (!sessionStorage.getItem(reloadKey)) {
+            sessionStorage.setItem(reloadKey, '1');
+            setTimeout(hardReload, 1200);
+          }
+        }
       }, true);
       window.addEventListener('unhandledrejection', function(e) {
         console.warn('Promise rejection caught:', e.reason);
         var message = (e.reason && e.reason.message) ? e.reason.message : String(e.reason || 'Network error');
         showDiagError(message);
       });
-      // Safety timeout: If React takes more than 3.5s to mount, show recovery controls
+      // Safety timeout: If React takes more than 4s to mount, show recovery controls
       setTimeout(function() {
         if (!window.__SATOCRYP_MOUNTED) {
           showDiagError('Taking longer than expected. Tap reload below to refresh the connection.');
         }
-      }, 3500);
+      }, 4000);
     </script>
 
     <!-- Monetag Ads Integration (async with error tolerance) -->
@@ -135,8 +170,8 @@
         <div id="satocryp-diag-box" style="display: none; margin-top: 16px; padding: 14px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 14px; max-width: 290px;">
           <p id="satocryp-diag-msg" style="color: #fca5a5; font-size: 12px; margin: 0 0 12px 0; word-break: break-word; line-height: 1.4;"></p>
           <div style="display: flex; gap: 8px; justify-content: center;">
-            <button onclick="window.location.reload()" style="background-color: #f3ba2f; color: #000; font-weight: bold; border: none; padding: 9px 18px; border-radius: 9px; font-size: 12px; cursor: pointer;">Reload</button>
-            <button onclick="try { localStorage.clear(); } catch(e){} window.location.reload();" style="background: rgba(255,255,255,0.15); color: #fff; font-weight: 600; border: none; padding: 9px 14px; border-radius: 9px; font-size: 12px; cursor: pointer;">Reset Cache</button>
+            <button onclick="hardReload()" style="background-color: #f3ba2f; color: #000; font-weight: bold; border: none; padding: 9px 18px; border-radius: 9px; font-size: 12px; cursor: pointer;">Reload</button>
+            <button onclick="hardReload()" style="background: rgba(255,255,255,0.15); color: #fff; font-weight: 600; border: none; padding: 9px 14px; border-radius: 9px; font-size: 12px; cursor: pointer;">Reset Cache</button>
           </div>
         </div>
       </div>

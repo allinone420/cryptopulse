@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import firebaseConfigData from '../../firebase-applet-config.json';
 
 const firebaseConfig = {
@@ -24,5 +24,23 @@ try {
   console.error('Firebase Initialization Error:', e);
 }
 
-export const db = app ? getFirestore(app, firebaseConfigData.firestoreDatabaseId) : (null as any);
+let dbInstance: any = null;
+if (app) {
+  try {
+    dbInstance = initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      })
+    }, firebaseConfigData.firestoreDatabaseId);
+  } catch (e) {
+    try {
+      dbInstance = getFirestore(app, firebaseConfigData.firestoreDatabaseId);
+    } catch (err) {
+      console.error('Firestore fallback init error:', err);
+    }
+  }
+}
+
+export const db = dbInstance;
 export const auth = app ? getAuth(app) : (null as any);
+
