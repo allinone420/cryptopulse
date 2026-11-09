@@ -31,6 +31,39 @@
       })();
     </script>
 
+    <!-- In-Memory Storage Polyfill (Guarantees tonconnect and firebase never crash on restricted webview storage) -->
+    <script>
+      (function() {
+        var isStorageSafe = false;
+        try {
+          var testKey = '__satocryp_storage_test__';
+          window.localStorage.setItem(testKey, testKey);
+          window.localStorage.removeItem(testKey);
+          isStorageSafe = true;
+        } catch (e) {
+          isStorageSafe = false;
+        }
+
+        if (!isStorageSafe) {
+          var memoryStorage = {};
+          var fakeStorage = {
+            getItem: function(key) { return memoryStorage.hasOwnProperty(key) ? memoryStorage[key] : null; },
+            setItem: function(key, val) { memoryStorage[key] = String(val); },
+            removeItem: function(key) { delete memoryStorage[key]; },
+            clear: function() { memoryStorage = {}; },
+            key: function(i) { return Object.keys(memoryStorage)[i] || null; },
+            get length() { return Object.keys(memoryStorage).length; }
+          };
+          try {
+            Object.defineProperty(window, 'localStorage', { value: fakeStorage, configurable: true, enumerable: true, writable: true });
+          } catch(e) {}
+          try {
+            Object.defineProperty(window, 'sessionStorage', { value: fakeStorage, configurable: true, enumerable: true, writable: true });
+          } catch(e) {}
+        }
+      })();
+    </script>
+
     <style>
       :root, html, body {
         background-color: #0f1218 !important;
@@ -53,17 +86,33 @@
       }
     </style>
 
-    <!-- Global diagnostic script error logger -->
+    <!-- Global diagnostic script error logger with capture phase -->
     <script>
-      window.addEventListener('error', function(e) {
-        console.warn('App error detected:', e.message);
+      window.__SATOCRYP_MOUNTED = false;
+      function showDiagError(msg) {
         var errBox = document.getElementById('satocryp-diag-box');
         if (errBox) {
           errBox.style.display = 'block';
           var errMsg = document.getElementById('satocryp-diag-msg');
-          if (errMsg && e.message) errMsg.textContent = e.message;
+          if (errMsg && msg) errMsg.textContent = msg;
         }
+      }
+      window.addEventListener('error', function(e) {
+        console.warn('Script error caught:', e);
+        var message = e.message || (e.target && e.target.src ? 'Failed to load script: ' + e.target.src : 'Initialization error');
+        showDiagError(message);
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        console.warn('Promise rejection caught:', e.reason);
+        var message = (e.reason && e.reason.message) ? e.reason.message : String(e.reason || 'Network error');
+        showDiagError(message);
       });
+      // Safety timeout: If React takes more than 3.5s to mount, show recovery controls
+      setTimeout(function() {
+        if (!window.__SATOCRYP_MOUNTED) {
+          showDiagError('Taking longer than expected. Tap reload below to refresh the connection.');
+        }
+      }, 3500);
     </script>
 
     <!-- Monetag Ads Integration (async with error tolerance) -->
@@ -83,9 +132,12 @@
         </div>
         <div style="width: 38px; height: 38px; border: 3px solid rgba(243, 186, 47, 0.2); border-top: 3px solid #f3ba2f; border-radius: 50%; animation: satocryp-spin 0.8s linear infinite; margin-bottom: 24px;"></div>
         
-        <div id="satocryp-diag-box" style="display: none; margin-top: 16px; padding: 12px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 12px; max-width: 280px;">
-          <p id="satocryp-diag-msg" style="color: #fca5a5; font-size: 11px; margin: 0 0 10px 0; word-break: break-word;"></p>
-          <button onclick="window.location.reload()" style="background-color: #f3ba2f; color: #000; font-weight: bold; border: none; padding: 8px 16px; border-radius: 8px; font-size: 12px; cursor: pointer;">Reload</button>
+        <div id="satocryp-diag-box" style="display: none; margin-top: 16px; padding: 14px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 14px; max-width: 290px;">
+          <p id="satocryp-diag-msg" style="color: #fca5a5; font-size: 12px; margin: 0 0 12px 0; word-break: break-word; line-height: 1.4;"></p>
+          <div style="display: flex; gap: 8px; justify-content: center;">
+            <button onclick="window.location.reload()" style="background-color: #f3ba2f; color: #000; font-weight: bold; border: none; padding: 9px 18px; border-radius: 9px; font-size: 12px; cursor: pointer;">Reload</button>
+            <button onclick="try { localStorage.clear(); } catch(e){} window.location.reload();" style="background: rgba(255,255,255,0.15); color: #fff; font-weight: 600; border: none; padding: 9px 14px; border-radius: 9px; font-size: 12px; cursor: pointer;">Reset Cache</button>
+          </div>
         </div>
       </div>
     </div>

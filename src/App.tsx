@@ -8,7 +8,6 @@ import confetti from 'canvas-confetti';
 import WebApp from '@twa-dev/sdk';
 import { hapticFeedback, hapticNotification } from './lib/telegram';
 import { TonConnectButton, useTonConnectUI } from '@tonconnect/ui-react';
-import { TonConnect } from '@tonconnect/sdk';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { LeaderboardEntry, AdTask } from './types/game';

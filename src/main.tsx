@@ -1,11 +1,15 @@
-import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import { TonConnectUIProvider } from '@tonconnect/ui-react';
 import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
-// Guaranteed valid absolute manifest URL for TON Connect in all browser/webview contexts
+// Signal to initial diagnostic shell that JS execution has started
+if (typeof window !== 'undefined') {
+  (window as any).__SATOCRYP_MOUNTED = true;
+}
+
 const getManifestUrl = () => {
   try {
     if (typeof window !== 'undefined' && window.location) {
@@ -24,12 +28,21 @@ const getManifestUrl = () => {
 
 const manifestUrl = getManifestUrl();
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <TonConnectUIProvider manifestUrl={manifestUrl}>
-        <App />
-      </TonConnectUIProvider>
-    </ErrorBoundary>
-  </StrictMode>,
-);
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  const root = createRoot(rootElement);
+  root.render(
+    <StrictMode>
+      <ErrorBoundary>
+        <TonConnectUIProvider 
+          manifestUrl={manifestUrl}
+          actionsConfiguration={{
+            twaReturnUrl: 'https://t.me/SatoCrypBot'
+          }}
+        >
+          <App />
+        </TonConnectUIProvider>
+      </ErrorBoundary>
+    </StrictMode>
+  );
+}
