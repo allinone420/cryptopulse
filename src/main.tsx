@@ -13,13 +13,12 @@ if (typeof window !== 'undefined') {
 const getManifestUrl = () => {
   try {
     if (typeof window !== 'undefined' && window.location) {
-      const origin = window.location.origin;
-      const pathname = window.location.pathname;
-      const pathSegments = pathname.split('/').filter(Boolean);
-      const subpath = pathSegments.length > 0 && !pathname.endsWith('.html') && !pathname.endsWith('/') ? '/' + pathSegments[0] : '';
-      if (origin && origin !== 'null' && origin.startsWith('http')) {
-        return `${origin}${subpath}/tonconnect-manifest.json`;
-      }
+      const url = new URL(window.location.href);
+      const pathname = url.pathname;
+      const cleanPath = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+      const lastSlashIndex = cleanPath.lastIndexOf('/');
+      const basePath = lastSlashIndex > 0 ? cleanPath.substring(0, lastSlashIndex) : '';
+      return `${url.origin}${basePath}/tonconnect-manifest.json`;
     }
   } catch (e) {}
   return 'https://allinone420.github.io/cryptopulse/tonconnect-manifest.json';
