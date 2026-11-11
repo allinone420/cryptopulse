@@ -91,6 +91,18 @@
 
     <!-- Global diagnostic script error logger with capture phase and aggressive cache bust -->
     <script>
+      (function() {
+        var origError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var str = args.map(function(a) { return String(a || ''); }).join(' ');
+          if (str.indexOf('TON_CONNECT_SDK') !== -1 || str.indexOf('analytics') !== -1) {
+            return;
+          }
+          origError.apply(console, arguments);
+        };
+      })();
+
       window.__SATOCRYP_MOUNTED = false;
       function hardReload() {
         try {
@@ -138,8 +150,19 @@
         }
       }, true);
       window.addEventListener('unhandledrejection', function(e) {
-        console.warn('Promise rejection caught:', e.reason);
+        var reasonStr = '';
+        try {
+          reasonStr = JSON.stringify(e.reason || '');
+        } catch (err) {
+          reasonStr = String(e.reason || '');
+        }
         var message = (e.reason && e.reason.message) ? e.reason.message : String(e.reason || 'Network error');
+        if (message.indexOf('analytics') !== -1 || message.indexOf('TON_CONNECT_SDK') !== -1 || reasonStr.indexOf('analytics') !== -1) {
+          // Suppress harmless TonConnect SDK analytics telemetry fetch errors
+          e.preventDefault();
+          return;
+        }
+        console.warn('Promise rejection caught:', e.reason);
         showDiagError(message);
       });
       // Safety timeout: If React takes more than 4s to mount, show recovery controls

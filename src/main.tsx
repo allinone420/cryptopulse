@@ -13,6 +13,10 @@ if (typeof window !== 'undefined') {
 const getManifestUrl = () => {
   try {
     if (typeof window !== 'undefined' && window.location) {
+      const hostname = window.location.hostname;
+      if (hostname && hostname.includes('github.io')) {
+        return 'https://allinone420.github.io/cryptopulse/tonconnect-manifest.json';
+      }
       const url = new URL(window.location.href);
       const pathname = url.pathname;
       const cleanPath = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
