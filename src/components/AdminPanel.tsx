@@ -1265,7 +1265,7 @@ const ComboSlot = ({ index, dailyComboCards, setDailyComboCards }: { index: numb
   const currentCards = dailyComboCards.split(',').map(s => s.trim()).filter(Boolean);
   const selectedCardId = currentCards[index] || '';
   const selectedCard = MINE_CARDS.find(c => c.id === selectedCardId);
-  const [selectedCategory, setSelectedCategory] = useState(selectedCard?.category || 'Markets');
+  const [selectedCategory, setSelectedCategory] = useState(selectedCard?.category || 'Nodes');
 
   return (
     <div className="bg-black/40 border border-white/10 p-4 rounded-2xl flex flex-col gap-3">
@@ -1278,10 +1278,10 @@ const ComboSlot = ({ index, dailyComboCards, setDailyComboCards }: { index: numb
           onChange={(e) => setSelectedCategory(e.target.value as any)}
           className="w-full bg-white/5 border border-white/10 p-2 rounded-lg text-[10px] font-bold outline-none text-white appearance-none"
         >
-          <option value="Markets">MARKETS</option>
-          <option value="PR&Team">PR&TEAM</option>
-          <option value="Legal">LEGAL</option>
-          <option value="Special">SPECIAL</option>
+          <option value="Nodes">NODES</option>
+          <option value="DeFi">DEFI</option>
+          <option value="CoreTech">CORE TECH</option>
+          <option value="Space">SPACE</option>
         </select>
       </div>
 

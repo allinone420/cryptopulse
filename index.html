@@ -136,6 +136,12 @@
         }
       }
       window.addEventListener('error', function(e) {
+        var src = (e.target && e.target.src) ? e.target.src : '';
+        if (src && (src.indexOf('libtl.com') !== -1 || src.indexOf('sdk.js') !== -1)) {
+          // Ignore ad blocker / network failures for third-party ad scripts
+          e.preventDefault();
+          return;
+        }
         console.warn('Script error caught:', e);
         var isScriptLoadError = e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK');
         var message = e.message || (e.target && e.target.src ? 'Failed to load script: ' + e.target.src : 'Initialization error');
@@ -172,9 +178,6 @@
         }
       }, 4000);
     </script>
-
-    <!-- Monetag Ads Integration (async with error tolerance) -->
-    <script async src='https://libtl.com/sdk.js' data-zone='10932949' data-sdk='show_10932949' onerror="console.warn('Ads SDK notice: script unavailable')"></script>
   </head>
   <body style="background-color: #0f1218; color: #ffffff; margin: 0; min-height: 100vh;">
     <div id="root">

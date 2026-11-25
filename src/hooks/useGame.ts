@@ -228,8 +228,16 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
                 const q = query(collection(db, 'users'), where('telegramId', '==', currentTgId), limit(1));
                 const tgSnap = await getDocs(q);
                 if (!tgSnap.empty) {
-                  const existingTgUser = tgSnap.docs[0].data() as UserData;
-                  setUser(existingTgUser);
+                  const existingData = tgSnap.docs[0].data() as UserData;
+                  const migratedUser: UserData = {
+                    ...existingData,
+                    uid: targetUid,
+                    lastActive: Date.now()
+                  };
+                  try {
+                    await setDoc(userRef, migratedUser);
+                  } catch (e) {}
+                  setUser(migratedUser);
                   setLoading(false);
                   return;
                 }
@@ -634,8 +642,19 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
     return success;
   }, [user?.level, calculateMaxEnergy]);
 
+  const ensureAuth = async () => {
+    if (!auth.currentUser) {
+      try {
+        await signInAnonymously(auth);
+      } catch (err) {
+        console.warn("ensureAuth sign-in warning:", err);
+      }
+    }
+  };
+
   const levelUp = useCallback(async () => {
     if (!user) return;
+    await ensureAuth();
     
     const nextLevel = LEVELS.find(l => l.level === user.level + 1);
     if (!nextLevel) return;
@@ -820,6 +839,7 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
 
   const claimDailyReward = useCallback(async () => {
     if (!user || isClaimingRef.current) return;
+    await ensureAuth();
 
     const now = Date.now();
     const lastClaim = user.lastDailyReward || 0;
@@ -871,6 +891,7 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
 
   const claimCipher = useCallback(async () => {
     if (!user || user.dailyCipher?.isCompleted) return;
+    await ensureAuth();
     
     const reward = settings?.dailyCipherReward || DAILY_CIPHER_REWARD;
     const updatedCipher = {
@@ -903,6 +924,7 @@ export const useGame = (activeTab?: string, skipInit: boolean = false) => {
 
   const claimCombo = useCallback(async () => {
     if (!user || user.dailyCombo?.claimed) return;
+    await ensureAuth();
     
     const reward = settings?.dailyComboReward || DAILY_COMBO_REWARD;
     const updatedCombo = {

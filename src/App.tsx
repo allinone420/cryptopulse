@@ -84,12 +84,15 @@ export default function App() {
   const [showCombo, setShowCombo] = useState(false);
   const [showBoosts, setShowBoosts] = useState(false);
   const [showLevelUp, setShowLevelUp] = useState(false);
+  const [showLevelUpSuccess, setShowLevelUpSuccess] = useState(false);
+  const [upgradedLevelInfo, setUpgradedLevelInfo] = useState<any>(null);
+  const [isUpgrading, setIsUpgrading] = useState(false);
   const [cipherInput, setCipherInput] = useState<string>('');
   const [cipherStatus, setCipherStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [copied, setCopied] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loadingLeaders, setLoadingLeaders] = useState(false);
-  const [mineCategory, setMineCategory] = useState<'Markets' | 'PR&Team' | 'Legal' | 'Special'>('Markets');
+  const [mineCategory, setMineCategory] = useState<'Nodes' | 'DeFi' | 'CoreTech' | 'Space'>('Nodes');
   const tapContainerRef = useRef<HTMLDivElement>(null);
 
   // Simple Router based on path/search/hash
@@ -313,31 +316,41 @@ export default function App() {
   const currentLevelInfo = LEVELS.find(l => l.level === (user?.level || 1)) || LEVELS[0];
 
   const handleLevelUp = async () => {
-    if (!user || !nextLevel) return;
+    if (!user || !nextLevel || isUpgrading) return;
     if (user.coins >= nextLevel.upgradeCost) {
-      await levelUp();
-      setShowLevelUp(false);
-      
-      // Celebratory Effects
-      const duration = 3 * 1000;
-      const animationEnd = Date.now() + duration;
-      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+      setIsUpgrading(true);
+      const targetNextLevel = nextLevel;
+      try {
+        await levelUp();
+        setShowLevelUp(false);
+        setUpgradedLevelInfo(targetNextLevel);
+        setShowLevelUpSuccess(true);
+        
+        // Celebratory Effects
+        const duration = 3 * 1000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 130 };
 
-      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+        const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
 
-      const interval: any = setInterval(function() {
-        const timeLeft = animationEnd - Date.now();
+        const interval: any = setInterval(function() {
+          const timeLeft = animationEnd - Date.now();
 
-        if (timeLeft <= 0) {
-          return clearInterval(interval);
-        }
+          if (timeLeft <= 0) {
+            return clearInterval(interval);
+          }
 
-        const particleCount = 50 * (timeLeft / duration);
-        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
-        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
-      }, 250);
+          const particleCount = 50 * (timeLeft / duration);
+          confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+          confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+        }, 250);
 
-      hapticNotification('success');
+        hapticNotification('success');
+      } catch (err) {
+        console.error("Level up error:", err);
+      } finally {
+        setIsUpgrading(false);
+      }
     } else {
       hapticNotification('error');
     }
@@ -916,7 +929,7 @@ export default function App() {
     </div>
   );
   const renderMine = () => {
-    const categories: ('Markets' | 'PR&Team' | 'Legal' | 'Special')[] = ['Markets', 'PR&Team', 'Legal', 'Special'];
+    const categories: ('Nodes' | 'DeFi' | 'CoreTech' | 'Space')[] = ['Nodes', 'DeFi', 'CoreTech', 'Space'];
     const totalProfitPerHour = Math.floor((user?.passiveIncomeRate || 0) * 3600);
 
     return (
@@ -1327,10 +1340,17 @@ export default function App() {
 
                   <button 
                     onClick={handleLevelUp}
-                    disabled={(user?.coins || 0) < nextLevel.upgradeCost}
-                    className="w-full bg-accent-gold text-black py-4 rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl shadow-accent-gold/20 active:translate-y-0.5 transition-all disabled:opacity-30 disabled:scale-100 mt-4"
+                    disabled={(user?.coins || 0) < nextLevel.upgradeCost || isUpgrading}
+                    className="w-full bg-accent-gold text-black py-4 rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl shadow-accent-gold/20 active:translate-y-0.5 transition-all disabled:opacity-30 disabled:scale-100 mt-4 flex items-center justify-center gap-2"
                   >
-                    Upgrade Level
+                    {isUpgrading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                        Upgrading...
+                      </>
+                    ) : (
+                      'Upgrade Level'
+                    )}
                   </button>
                 </>
               ) : (
@@ -1343,6 +1363,65 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Level Up Success Surprise Popup */}
+      <AnimatePresence>
+        {showLevelUpSuccess && upgradedLevelInfo && (
+          <div 
+            onClick={() => setShowLevelUpSuccess(false)}
+            className="fixed inset-0 z-[130] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fadeIn"
+          >
+            <motion.div
+              onClick={(e) => e.stopPropagation()}
+              initial={{ scale: 0.8, opacity: 0, y: 30 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.8, opacity: 0, y: 30 }}
+              className="bg-card-bg w-full max-w-sm rounded-[32px] border border-accent-gold/40 p-6 flex flex-col items-center text-center shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute -top-12 -left-12 w-32 h-32 bg-accent-gold/20 rounded-full blur-2xl pointer-events-none"></div>
+              <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-accent-gold/20 rounded-full blur-2xl pointer-events-none"></div>
+
+              <div className="w-24 h-24 bg-gradient-to-br from-accent-gold to-yellow-600 rounded-[32px] flex items-center justify-center text-black shadow-xl shadow-accent-gold/30 mb-4 animate-bounce">
+                <Trophy size={48} className="fill-black" />
+              </div>
+
+              <span className="text-[10px] font-black uppercase px-3 py-1 bg-accent-gold/20 text-accent-gold rounded-full border border-accent-gold/30 mb-2">
+                Rank Up Achieved!
+              </span>
+
+              <h2 className="text-2xl font-black italic text-white mb-1 uppercase tracking-wider">
+                {upgradedLevelInfo.name}
+              </h2>
+              <p className="text-text-secondary text-xs mb-6">
+                You have successfully unlocked Level {upgradedLevelInfo.level}! Your mining power and tapping capability have increased.
+              </p>
+
+              <div className="w-full grid grid-cols-3 gap-2 mb-6">
+                <div className="p-3 bg-black/40 rounded-2xl border border-white/5 flex flex-col items-center">
+                  <span className="text-[9px] text-text-secondary uppercase font-bold mb-1">Tap Value</span>
+                  <span className="text-sm font-black text-accent-gold">+{upgradedLevelInfo.tapValue}</span>
+                </div>
+                <div className="p-3 bg-black/40 rounded-2xl border border-white/5 flex flex-col items-center">
+                  <span className="text-[9px] text-text-secondary uppercase font-bold mb-1">PPH</span>
+                  <span className="text-sm font-black text-accent-gold">+{(upgradedLevelInfo.passiveRate * 3600).toLocaleString()}</span>
+                </div>
+                <div className="p-3 bg-black/40 rounded-2xl border border-white/5 flex flex-col items-center">
+                  <span className="text-[9px] text-text-secondary uppercase font-bold mb-1">Max Energy</span>
+                  <span className="text-sm font-black text-accent-gold">{upgradedLevelInfo.maxEnergy.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => setShowLevelUpSuccess(false)}
+                className="w-full bg-accent-gold text-black py-4 rounded-2xl font-black uppercase text-sm tracking-widest shadow-xl shadow-accent-gold/30 active:scale-[0.98] transition-all"
+              >
+                Awesome! 🚀
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Boosts Modal */}
       <AnimatePresence>
         {showBoosts && (
